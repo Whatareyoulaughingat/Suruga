@@ -1,0 +1,36 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.30907.101
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Suruga", "Suruga\Suruga.csproj", "{3CD957EE-B612-4C3B-B36E-2DA1AF7854F8}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{F6F46ADD-EA4D-48B7-BB95-4CDF9073A8F3}"
+	ProjectSection(SolutionItems) = preProject
+		.editorconfig = .editorconfig
+	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Suruga.Installer", "Suruga.Installer\Suruga.Installer.csproj", "{42E6C0C5-8859-4B2E-8568-222CE77DF894}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{3CD957EE-B612-4C3B-B36E-2DA1AF7854F8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3CD957EE-B612-4C3B-B36E-2DA1AF7854F8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3CD957EE-B612-4C3B-B36E-2DA1AF7854F8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3CD957EE-B612-4C3B-B36E-2DA1AF7854F8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{42E6C0C5-8859-4B2E-8568-222CE77DF894}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{42E6C0C5-8859-4B2E-8568-222CE77DF894}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{42E6C0C5-8859-4B2E-8568-222CE77DF894}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{42E6C0C5-8859-4B2E-8568-222CE77DF894}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {94A3B8BD-104D-4A64-B0CF-8DF25D044DC9}
+	EndGlobalSection
+EndGlobal
