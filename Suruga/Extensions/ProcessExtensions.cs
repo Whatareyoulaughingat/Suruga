@@ -2,7 +2,6 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
-using System.Text.RegularExpressions;
 
 #pragma warning disable SA1602
 
@@ -83,13 +82,13 @@ namespace Suruga.Extensions
             string jobName = "ChildProcessTracker" + Environment.ProcessId;
             JobHandle = CreateJobObject(IntPtr.Zero, jobName);
 
-            JOBOBJECT_BASIC_LIMIT_INFORMATION info = new JOBOBJECT_BASIC_LIMIT_INFORMATION
+            JOBOBJECT_BASIC_LIMIT_INFORMATION info = new()
             {
                 // This is the key flag. When our process is killed, Windows will automatically close the job handle, and when that happens, we want the child processes to be killed, too.
                 LimitFlags = JOBOBJECTLIMIT.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
             };
 
-            JOBOBJECT_EXTENDED_LIMIT_INFORMATION extendedInfo = new JOBOBJECT_EXTENDED_LIMIT_INFORMATION
+            JOBOBJECT_EXTENDED_LIMIT_INFORMATION extendedInfo = new()
             {
                 BasicLimitInformation = info,
             };
@@ -127,19 +126,6 @@ namespace Suruga.Extensions
                     throw new Win32Exception("Failed to add Lavalink as a child of this process.");
                 }
             }
-        }
-
-        public static string EncodeParameterArgument(string original)
-        {
-            if (string.IsNullOrEmpty(original))
-            {
-                return original;
-            }
-
-            string value = Regex.Replace(original, @"(\\*)" + "\"", @"$1\$0");
-            value = Regex.Replace(value, @"^(.*\s.*?)(\\*)$", "\"$1$2$2\"");
-
-            return value;
         }
 
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]

@@ -229,14 +229,14 @@ namespace Suruga.Services
             else
             {
                 /*
-                Now we know if we have something in the queue worth replying with, so we itterate through all the Tracks in the queue.
+                Now we know if we have something in the queue worth replying with, so we iterate through all the Tracks in the queue.
                 Next Add the Track title and the url however make use of Discords Markdown feature to display everything neatly.
                 This trackNum variable is used to display the number in which the song is in place. (Start at 2 because we're including the current song.
                 */
 
                 int trackNum = 2;
 
-                StringBuilder builderDescription = new StringBuilder();
+                StringBuilder builderDescription = new();
                 foreach (LavalinkTrack track in Queue)
                 {
                     builderDescription.Append($"\n{trackNum}: **{track.Title}**.\n");

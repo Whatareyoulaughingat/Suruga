@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using DSharpPlus.Lavalink;
 
 namespace Suruga.Extensions
@@ -8,8 +9,7 @@ namespace Suruga.Extensions
     // Source: https://github.com/Yucked/Victoria/blob/v5/src/DefaultQueue.cs
     public class LavalinkExtensions<T> : IEnumerable<T> where T : LavalinkTrack
     {
-        private readonly LinkedList<T> list = new LinkedList<T>();
-        private readonly Random random = new Random();
+        private readonly LinkedList<T> list = new();
 
         /// <summary>
         /// Equeues a <see cref="LavalinkTrack"/>.
@@ -43,7 +43,7 @@ namespace Suruga.Extensions
                     return false;
                 }
 
-                var result = list.First.Value;
+                T result = list.First.Value;
                 if (list.First == null)
                 {
                     lavalinkTrack = default;
@@ -74,6 +74,8 @@ namespace Suruga.Extensions
 
                 for (LinkedListNode<T> node = list.First; !(node is null); node = node.Next)
                 {
+                    Random random = new();
+
                     int nextRandomNumber = random.Next(defaultNumber + 1);
                     if (defaultNumber != nextRandomNumber)
                     {
@@ -86,10 +88,7 @@ namespace Suruga.Extensions
 
                 list.Clear();
 
-                foreach (T value in shadow)
-                {
-                    list.AddLast(value);
-                }
+                shadow.ToList().ForEach(x => list.AddLast(x));
             }
         }
 

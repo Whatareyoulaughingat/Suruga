@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using DSharpPlus;
 using DSharpPlus.CommandsNext;
@@ -86,10 +87,7 @@ namespace Suruga.Client
                 Services = serviceProvider,
             });
 
-            foreach (KeyValuePair<int, CommandsNextExtension> item in commandsNextExtension)
-            {
-                item.Value.RegisterCommands<Music>();
-            }
+            commandsNextExtension.Values.ToList().ForEach(x => x.RegisterCommands<Music>());
         }
     }
 }

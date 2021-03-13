@@ -17,7 +17,7 @@ namespace Suruga.Handlers
         /// <returns>[<see cref="Task{DiscordMessage}"/>] An asynchronous operation that returns a value.</returns>
         public static async Task<DiscordMessage> CreateEmbed(DiscordChannel channel, DiscordMember member, string description, string imageUrl = null)
         {
-            DiscordEmbedBuilder embed = new DiscordEmbedBuilder()
+            DiscordEmbedBuilder embed = new()
             {
                 Color = DiscordColor.Azure,
                 Description = description,
@@ -39,7 +39,7 @@ namespace Suruga.Handlers
         /// <returns>[<see cref="Task{DiscordMessage}"/>] An asynchronous operation that returns a value.</returns>
         public static async Task<DiscordMessage> CreateErrorEmbed(DiscordChannel channel, DiscordMember member, string description)
         {
-            DiscordEmbedBuilder errorEmbed = new DiscordEmbedBuilder()
+            DiscordEmbedBuilder errorEmbed = new()
             {
                 Color = DiscordColor.Red,
                 Description = description,
