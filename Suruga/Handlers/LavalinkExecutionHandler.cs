@@ -16,11 +16,9 @@ namespace Suruga.Handlers
                 RecurseSubdirectories = true,
             });
 
-            if (!java.Any())
+            if (!java.Where(x => x.Contains("jdk-13.0.2")).Any())
             {
-                Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine("Could not find any Java version installed!");
-                Console.ResetColor();
+                Console.WriteLine("Could not find Java 13. Install it before running this bot.");
             }
 
             return java.Where(x => x.Contains("jdk-13.0.2")).First();
