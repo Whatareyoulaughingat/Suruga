@@ -13,7 +13,7 @@ namespace Suruga.Handlers
         /// <param name="channel">The channel inside a guild where the command was executed.</param>
         /// <param name="member">The guild member who executed a command causing the <see cref="EmbedHandler"/> to fire.</param>
         /// <param name="description">The description of the embed.</param>
-        /// <param name="imageUrl">A URL containing an image.</param>
+        /// <param name="imageUrl">[<see cref="Optional{string}"/>] A URL containing an image.</param>
         /// <returns>[<see cref="Task{DiscordMessage}"/>] An asynchronous operation that returns a value.</returns>
         public static async Task<DiscordMessage> CreateEmbed(DiscordChannel channel, DiscordMember member, string description, string imageUrl = null)
         {
@@ -23,11 +23,7 @@ namespace Suruga.Handlers
                 Description = description,
                 ImageUrl = imageUrl,
                 Timestamp = DateTimeOffset.Now,
-                Footer = new DiscordEmbedBuilder.EmbedFooter()
-                {
-                    IconUrl = member.AvatarUrl,
-                    Text = member.DisplayName,
-                },
+                Footer = new DiscordEmbedBuilder.EmbedFooter() { IconUrl = member.AvatarUrl, Text = member.DisplayName },
             };
 
             embed.Build();
@@ -48,11 +44,7 @@ namespace Suruga.Handlers
                 Color = DiscordColor.Red,
                 Description = description,
                 Timestamp = DateTimeOffset.Now,
-                Footer = new DiscordEmbedBuilder.EmbedFooter()
-                {
-                    IconUrl = member.AvatarUrl,
-                    Text = member.DisplayName,
-                },
+                Footer = new DiscordEmbedBuilder.EmbedFooter() { IconUrl = member.AvatarUrl, Text = member.DisplayName },
             };
 
             errorEmbed.Build();
