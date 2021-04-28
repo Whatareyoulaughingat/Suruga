@@ -1,170 +1,139 @@
-﻿using System;
-using System.Linq;
+﻿using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using DSharpPlus;
 using DSharpPlus.Entities;
-using DSharpPlus.Lavalink;
-using DSharpPlus.Lavalink.EventArgs;
-using Suruga.Extensions;
+using Lavalink4NET;
+using Lavalink4NET.Player;
+using Lavalink4NET.Rest;
 using Suruga.Handlers;
 
 namespace Suruga.Services
 {
     public class MusicService
     {
-        private const int DefaultVolume = 50;
-        private bool defaultVolumeChanged = false;
-
-        public MusicService()
-            => Queue = new LavalinkExtensions<LavalinkTrack>();
-
-        private LavalinkExtensions<LavalinkTrack> Queue { get; set; }
-
-        public async Task<DiscordMessage> PlayAsync(DiscordClient client, DiscordChannel channel, DiscordMember member, string url)
+        public async Task<DiscordMessage> PlayAsync(DiscordChannel channel, DiscordMember member, IAudioService audioService, string url)
         {
-            // Connecting to a voice channel.
             if (member.VoiceState == null || member.VoiceState.Channel == null)
             {
-                return await EmbedHandler.CreateErrorEmbed(channel, member, "You must first join a voice channel.");
+                return await EmbedHandler.CreateErrorEmbed(channel, member, "Join a voice channel first.");
             }
 
-            LavalinkExtension lavalink = client.GetLavalink();
-            LavalinkNodeConnection lavalinkNode = lavalink.ConnectedNodes.Values.First();
-            await lavalinkNode.ConnectAsync(member.VoiceState.Channel);
-
-            // Playing a URL in a voice channel.
-            LavalinkGuildConnection connection = lavalinkNode.GetGuildConnection(member.VoiceState.Guild);
-            LavalinkLoadResult loadResult = await lavalinkNode.Rest.GetTracksAsync(url, LavalinkSearchType.Youtube | LavalinkSearchType.SoundCloud);
-
-            // Hook an event for playing tracks one after another (assuming there is a queue). This event was supposed to be put in HookEvents() (SurugaClient.cs file) alongside with some other events but it's not possible.
-            connection.PlaybackFinished += async (connection, trackEndedArgs) => await TrackFinishedReason(trackEndedArgs, channel, member);
-
-            if (loadResult.LoadResultType == LavalinkLoadResultType.LoadFailed || loadResult.LoadResultType == LavalinkLoadResultType.NoMatches)
+            if (string.IsNullOrWhiteSpace(url))
             {
-                return await EmbedHandler.CreateErrorEmbed(channel, member, "Failed to search or load for the specifed track!");
+                return await EmbedHandler.CreateErrorEmbed(channel, member, "Specify a valid URL.");
             }
 
-            LavalinkTrack lavalinkTrack = loadResult.Tracks.First();
+            QueuedLavalinkPlayer player = audioService.GetPlayer<QueuedLavalinkPlayer>(member.Guild.Id)
+                ?? await audioService.JoinAsync<QueuedLavalinkPlayer>(member.Guild.Id, member.VoiceState.Channel.Id, true);
 
-            if (connection.CurrentState.CurrentTrack != null)
+            audioService.TrackEnd += (sender, trackEndEventArgs) => player.OnTrackEndAsync(trackEndEventArgs);
+            audioService.TrackException += (sender, trackExceptionEventArgs) => player.OnTrackExceptionAsync(trackExceptionEventArgs);
+            audioService.TrackStuck += (sender, trackStuckEventArgs) => player.OnTrackStuckAsync(trackStuckEventArgs);
+
+            TrackLoadResponsePayload trackLoadResponse = await audioService.LoadTracksAsync(url, SearchMode.YouTube);
+            if (trackLoadResponse.LoadType == TrackLoadType.LoadFailed || trackLoadResponse.LoadType == TrackLoadType.NoMatches)
             {
-                Queue.Enqueue(lavalinkTrack);
-                return await EmbedHandler.CreateEmbed(channel, member, $"[{lavalinkTrack.Title}]({lavalinkTrack.Uri.AbsoluteUri}) has been added to the queue.");
+                return await EmbedHandler.CreateErrorEmbed(channel, member, "Failed to load the specified track or there were no matches of it.");
             }
 
-            if (defaultVolumeChanged != false)
+            LavalinkTrack track = trackLoadResponse.Tracks.First();
+
+            if ((player.CurrentTrack != null && player.State == PlayerState.Playing) || player.State == PlayerState.Paused)
             {
-                await connection.SetVolumeAsync(DefaultVolume);
+                player.Queue.Add(track);
+                return await EmbedHandler.CreateEmbed(channel, member, $"{track.Title} has been added to the queue.");
             }
 
-            await connection.PlayAsync(lavalinkTrack);
-            return await EmbedHandler.CreateEmbed(channel, member, $"Now Playing: [{connection.CurrentState.CurrentTrack.Title}]({connection.CurrentState.CurrentTrack.Uri.AbsoluteUri})");
+            await player.PlayAsync(track);
+            return await EmbedHandler.CreateEmbed(channel, member, $"Now Playing [{track.Title}]({track.Source})");
         }
 
-        public async Task<DiscordMessage> LeaveAsync(DiscordClient client, DiscordChannel channel, DiscordMember member)
+        public async Task<DiscordMessage> LeaveAsync(DiscordChannel channel, DiscordMember member, IAudioService audioService)
         {
             if (member.VoiceState == null || member.VoiceState.Channel == null)
             {
                 return await EmbedHandler.CreateErrorEmbed(channel, member, "You must first join a voice channel.");
             }
 
-            LavalinkExtension lavalink = client.GetLavalink();
-            LavalinkNodeConnection lavalinkNode = lavalink.ConnectedNodes.Values.First();
-            LavalinkGuildConnection connection = lavalinkNode.GetGuildConnection(member.VoiceState.Guild);
+            QueuedLavalinkPlayer player = audioService.GetPlayer<QueuedLavalinkPlayer>(member.Guild.Id);
 
-            string voiceChannel = connection.Channel.Name;
-
-            await connection.DisconnectAsync();
-            return await EmbedHandler.CreateEmbed(channel, member, $"Left **{voiceChannel}**");
+            await player.DisconnectAsync();
+            return await EmbedHandler.CreateEmbed(channel, member, $"Left **{member.VoiceState.Channel.Name}**");
         }
 
-        public async Task StopAsync(DiscordClient client, DiscordChannel channel, DiscordMember member)
-        {
-            if (member.VoiceState == null || member.VoiceState.Channel == null)
-            {
-                await EmbedHandler.CreateErrorEmbed(channel, member, "You must first join a voice channel.");
-                return;
-            }
-
-            LavalinkExtension lavalink = client.GetLavalink();
-            LavalinkNodeConnection node = lavalink.ConnectedNodes.Values.First();
-            LavalinkGuildConnection connection = node.GetGuildConnection(member.VoiceState.Guild);
-
-            await connection.StopAsync();
-        }
-
-        public async Task<DiscordMessage> PauseAsync(DiscordClient client, DiscordChannel channel, DiscordMember member)
+        public async Task<DiscordMessage> StopAsync(DiscordChannel channel, DiscordMember member, IAudioService audioService)
         {
             if (member.VoiceState == null || member.VoiceState.Channel == null)
             {
                 return await EmbedHandler.CreateErrorEmbed(channel, member, "You must first join a voice channel.");
             }
 
-            LavalinkExtension lavalink = client.GetLavalink();
-            LavalinkNodeConnection node = lavalink.ConnectedNodes.Values.First();
-            LavalinkGuildConnection connection = node.GetGuildConnection(member.VoiceState.Guild);
+            QueuedLavalinkPlayer player = audioService.GetPlayer<QueuedLavalinkPlayer>(member.Guild.Id);
 
-            if (connection.CurrentState.CurrentTrack == null)
+            if (player.State == PlayerState.NotPlaying)
             {
-                return await EmbedHandler.CreateErrorEmbed(channel, member, "There is nothing to pause.");
+                return await EmbedHandler.CreateErrorEmbed(channel, member, "There isn't anything to stop.");
             }
 
-            await connection.PauseAsync();
-            return await EmbedHandler.CreateEmbed(channel, member, $"Paused [{connection.CurrentState.CurrentTrack.Title}]({connection.CurrentState.CurrentTrack.Uri.AbsoluteUri})");
+            await player.StopAsync();
+            return await EmbedHandler.CreateEmbed(channel, member, "Stopped the playback.");
         }
 
-        public async Task<DiscordMessage> ResumeAsync(DiscordClient client, DiscordChannel channel, DiscordMember member)
+        public async Task<DiscordMessage> PauseAsync(DiscordChannel channel, DiscordMember member, IAudioService audioService)
+        {
+            if (member.VoiceState == null)
+            {
+                return await EmbedHandler.CreateErrorEmbed(channel, member, "You must first join a voice channel.");
+            }
+
+            QueuedLavalinkPlayer player = audioService.GetPlayer<QueuedLavalinkPlayer>(member.Guild.Id);
+
+            if (player.CurrentTrack == null || player.State == PlayerState.Paused)
+            {
+                return await EmbedHandler.CreateErrorEmbed(channel, member, "There isn't anything to pause.");
+            }
+
+            await player.PauseAsync();
+            return await EmbedHandler.CreateEmbed(channel, member, $"Paused [{player.CurrentTrack.Title}]({player.CurrentTrack.Source})");
+        }
+
+        public async Task<DiscordMessage> ResumeAsync(DiscordChannel channel, DiscordMember member, IAudioService audioService)
         {
             if (member.VoiceState == null || member.VoiceState.Channel == null)
             {
                 return await EmbedHandler.CreateErrorEmbed(channel, member, "You must first join a voice channel.");
             }
 
-            LavalinkExtension lavalink = client.GetLavalink();
-            LavalinkNodeConnection node = lavalink.ConnectedNodes.Values.First();
-            LavalinkGuildConnection connection = node.GetGuildConnection(member.VoiceState.Guild);
+            QueuedLavalinkPlayer player = audioService.GetPlayer<QueuedLavalinkPlayer>(member.Guild.Id);
 
-            if (connection.CurrentState.CurrentTrack == null)
+            if (player.CurrentTrack == null || player.State == PlayerState.Playing)
             {
                 return await EmbedHandler.CreateErrorEmbed(channel, member, "There is nothing to resume.");
             }
 
-            await connection.ResumeAsync();
-            return await EmbedHandler.CreateEmbed(channel, member, $"Resumed [{connection.CurrentState.CurrentTrack.Title}]({connection.CurrentState.CurrentTrack.Uri.AbsoluteUri})");
+            await player.ResumeAsync();
+            return await EmbedHandler.CreateEmbed(channel, member, $"Resumed [{player.CurrentTrack.Title}]({player.CurrentTrack.Source})");
         }
 
-        public async Task<DiscordMessage> UpdateVolumeAsync(DiscordClient client, DiscordChannel channel, DiscordMember member, int volume)
+        public async Task<DiscordMessage> UpdateVolumeAsync(DiscordChannel channel, DiscordMember member, IAudioService audioService, float volume)
         {
             if (member.VoiceState == null || member.VoiceState.Channel == null)
             {
                 return await EmbedHandler.CreateErrorEmbed(channel, member, "You must first join a voice channel.");
             }
 
-            if (volume > 100 || volume < 0)
+            if (volume > 10f || volume < 0f)
             {
-                return await EmbedHandler.CreateErrorEmbed(channel, member, "Volume must be between 0 to 100.");
+                return await EmbedHandler.CreateErrorEmbed(channel, member, "The volume must be in a range between 0 and 10.");
             }
 
-            LavalinkExtension lavalink = client.GetLavalink();
-            LavalinkNodeConnection node = lavalink.ConnectedNodes.Values.First();
-            LavalinkGuildConnection connection = node.GetGuildConnection(member.VoiceState.Guild);
+            QueuedLavalinkPlayer player = audioService.GetPlayer<QueuedLavalinkPlayer>(member.Guild.Id);
 
-            // If the input volume is not equal to the default volume, then the default volume has changed, otherwise it hasn't.
-            if (volume != DefaultVolume)
-            {
-                defaultVolumeChanged = true;
-            }
-            else
-            {
-                defaultVolumeChanged = true;
-            }
-
-            await connection.SetVolumeAsync(volume);
+            await player.SetVolumeAsync(volume, force: true);
             return await EmbedHandler.CreateEmbed(channel, member, $"Updated volume to {volume}");
         }
 
-        public async Task<LavalinkTrack> SkipAsync(DiscordClient client, DiscordChannel channel, DiscordMember member, TimeSpan? delay = default)
+        public async Task<DiscordMessage> SkipAsync(DiscordChannel channel, DiscordMember member, IAudioService audioService, int skipCount = 1)
         {
             if (member.VoiceState == null || member.VoiceState.Channel == null)
             {
@@ -172,59 +141,58 @@ namespace Suruga.Services
                 return null;
             }
 
-            LavalinkExtension lavalink = client.GetLavalink();
-            LavalinkNodeConnection node = lavalink.ConnectedNodes.Values.First();
-            LavalinkGuildConnection connection = node.GetGuildConnection(member.VoiceState.Guild);
+            QueuedLavalinkPlayer player = audioService.GetPlayer<QueuedLavalinkPlayer>(member.Guild.Id);
 
-            if (!Queue.Dequeue(out LavalinkTrack queueableLavalinkTrack))
+            if (!player.Queue.TryDequeue(out LavalinkTrack queueableLavalinkTrack))
             {
-                await EmbedHandler.CreateErrorEmbed(channel, member, "There isn't any track to play in order to skip the current track.");
-                return null;
+                return await EmbedHandler.CreateErrorEmbed(channel, member, "There isn't any track in the queue in order to skip the current one.");
             }
 
-            if (queueableLavalinkTrack is not LavalinkTrack lavalinkTrack)
+            if (queueableLavalinkTrack is not LavalinkTrack)
             {
-                await EmbedHandler.CreateErrorEmbed(channel, member, $"Couldn't cast **{queueableLavalinkTrack.GetType()}**. Is the specific track valid?");
-                return null;
+                return await EmbedHandler.CreateErrorEmbed(channel, member, $"The specific track is invalid.");
             }
 
-            await Task.Delay(delay ?? TimeSpan.Zero)
-                .ContinueWith(_ => StopAsync(client, channel, member))
-                .ContinueWith(_ => PlayAsync(client, channel, member, queueableLavalinkTrack.Uri.AbsoluteUri));
+            if (skipCount > player.Queue.Count)
+            {
+                return await EmbedHandler.CreateErrorEmbed(channel, member, "The number of tracks to skip is bigger than the actual queue.");
+            }
 
-            return lavalinkTrack;
+            await player.SkipAsync(skipCount);
+            await player.PlayAsync(queueableLavalinkTrack);
+            return await EmbedHandler.CreateEmbed(channel, member, "Skipped the track.");
         }
 
-        public async Task<DiscordMessage> ShuffleAsync(DiscordChannel channel, DiscordMember member)
+        public async Task<DiscordMessage> ShuffleAsync(DiscordChannel channel, DiscordMember member, IAudioService audioService)
         {
             if (member.VoiceState == null || member.VoiceState.Channel == null)
             {
                 return await EmbedHandler.CreateErrorEmbed(channel, member, "You must first join a voice channel.");
             }
 
-            if (Queue == null | Queue.Count() <= 1)
+            QueuedLavalinkPlayer player = audioService.GetPlayer<QueuedLavalinkPlayer>(member.Guild.Id);
+
+            if (player.Queue.IsEmpty || player.Queue.Count <= 1)
             {
-                return await EmbedHandler.CreateErrorEmbed(channel, member, "There isn't a queue to shuffle.");
+                return await EmbedHandler.CreateErrorEmbed(channel, member, "The queue isn't big enough to shuffle. Have at least 2 tracks in the queue.");
             }
 
-            Queue.Shuffle();
-            return await EmbedHandler.CreateEmbed(channel, member, "Shuffled the playlist.");
+            player.Queue.Shuffle();
+            return await EmbedHandler.CreateEmbed(channel, member, "Shuffled the queue.");
         }
 
-        public async Task<DiscordMessage> ListQueueAsync(DiscordClient client, DiscordChannel channel, DiscordMember member)
+        public async Task<DiscordMessage> ListQueueAsync(DiscordChannel channel, DiscordMember member, IAudioService audioService)
         {
             if (member.VoiceState == null || member.VoiceState.Channel == null)
             {
                 return await EmbedHandler.CreateErrorEmbed(channel, member, "You must first join a voice channel.");
             }
 
-            LavalinkExtension lavalink = client.GetLavalink();
-            LavalinkNodeConnection node = lavalink.ConnectedNodes.Values.First();
-            LavalinkGuildConnection connection = node.GetGuildConnection(member.VoiceState.Guild);
+            QueuedLavalinkPlayer player = audioService.GetPlayer<QueuedLavalinkPlayer>(member.Guild.Id);
 
-            if (!Queue.Any() && connection.CurrentState.CurrentTrack != null)
+            if (!player.Queue.Any() && player.CurrentTrack != null)
             {
-                return await EmbedHandler.CreateEmbed(channel, member, $"Currently Playing: [{connection.CurrentState.CurrentTrack.Title}]({connection.CurrentState.CurrentTrack.Uri.AbsoluteUri}).\nNothing else is queued.");
+                return await EmbedHandler.CreateEmbed(channel, member, $"Currently Playing: [{player.CurrentTrack.Title}]({player.CurrentTrack.Source}).\nNothing else is queued.");
             }
             else
             {
@@ -237,7 +205,7 @@ namespace Suruga.Services
                 int trackNum = 2;
 
                 StringBuilder builderDescription = new();
-                foreach (LavalinkTrack track in Queue)
+                foreach (LavalinkTrack track in player.Queue)
                 {
                     builderDescription.Append($"\n{trackNum}: **{track.Title}**.\n");
                     trackNum++;
@@ -245,13 +213,14 @@ namespace Suruga.Services
                     await Task.CompletedTask;
                 }
 
-                return await EmbedHandler.CreateEmbed(channel, member, $"Currently playing: [{connection.CurrentState.CurrentTrack.Title}]({connection.CurrentState.CurrentTrack.Uri.AbsoluteUri}).\n{builderDescription}");
+                return await EmbedHandler.CreateEmbed(channel, member, $"Currently playing: [{player.CurrentTrack.Title}]({player.CurrentTrack.Source}).\n{builderDescription}");
             }
         }
 
-        public async Task<DiscordMessage> TrackFinishedReason(TrackFinishEventArgs trackEndReason, DiscordChannel channel, DiscordMember member)
+        /*
+        public async Task<DiscordMessage> TrackFinishedReason(TrackEndEventArgs trackEndReason, DiscordChannel channel, DiscordMember member)
         {
-            if (!trackEndReason.Reason.MayStartNext())
+            if (!trackEndReason.MayStartNext)
             {
                 return null;
             }
@@ -267,7 +236,8 @@ namespace Suruga.Services
             }
 
             await trackEndReason.Player.PlayAsync(lavalinkTrack);
-            return await EmbedHandler.CreateEmbed(channel, member, $"Now Playing: [{lavalinkTrack.Title}]({lavalinkTrack.Uri.AbsoluteUri}).");
+            return await EmbedHandler.CreateEmbed(channel, member, $"Now Playing: [{lavalinkTrack.Title}]({lavalinkTrack.Source}).");
         }
+        */
     }
 }
