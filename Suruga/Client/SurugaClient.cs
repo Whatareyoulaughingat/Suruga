@@ -1,13 +1,15 @@
-﻿using System.Collections.Generic;
-using System.Linq;
+﻿using System;
+using System.Collections.Generic;
+using System.Reflection;
 using System.Threading.Tasks;
 using DSharpPlus;
 using DSharpPlus.CommandsNext;
 using DSharpPlus.Entities;
-using DSharpPlus.Lavalink;
+using Lavalink4NET;
+using Lavalink4NET.Cluster;
+using Lavalink4NET.DSharpPlus;
 using Microsoft.Extensions.DependencyInjection;
 using Suruga.Handlers;
-using Suruga.Modules;
 using Suruga.Services;
 
 namespace Suruga.Client
@@ -16,27 +18,68 @@ namespace Suruga.Client
     {
         private readonly ServiceProvider serviceProvider;
 
-        private readonly DiscordShardedClient discordShardedClient;
-        private readonly LavalinkConfiguration lavalinkConfiguration;
+        private readonly DiscordShardedClient discordClient;
+        private readonly IAudioService audioService;
 
         public SurugaClient()
         {
-            // Build the DI.
-            serviceProvider = new ServiceCollection()
-                .AddSingleton(new DiscordShardedClient(new DiscordConfiguration
+            try
+            {
+                // Build the DI.
+                serviceProvider = new ServiceCollection()
+                    .AddSingleton(new DiscordShardedClient(new DiscordConfiguration
+                    {
+                        Token = ConfigurationHandler.Configuration.Token,
+                        Intents = DiscordIntents.GuildMessages | DiscordIntents.GuildVoiceStates | DiscordIntents.Guilds,
+                    }))
+
+                    .AddSingleton<IAudioService, LavalinkCluster>()
+                    .AddSingleton<IDiscordClientWrapper, DiscordShardedClientWrapper>()
+                    .AddSingleton(new LavalinkClusterOptions
+                    {
+                        Nodes = new[]
+                        {
+                            new LavalinkNodeOptions
+                            {
+                                RestUri = "http://localhost:2333",
+                                WebSocketUri = "ws://localhost:2333",
+                                Password = "youshallnotpass",
+                            },
+
+                            new LavalinkNodeOptions
+                            {
+                                RestUri = "http://localhost:2333",
+                                WebSocketUri = "ws://localhost:2333",
+                                Password = "youshallnotpass",
+                            },
+                        },
+
+                        LoadBalacingStrategy = LoadBalancingStrategies.ScoreStrategy,
+                        StayOnline = true,
+                    })
+
+                    .AddSingleton<ChannelService>()
+                    .AddSingleton<HentaiService>()
+                    .AddSingleton<MiscService>()
+                    .AddSingleton<MusicService>()
+                    .BuildServiceProvider();
+
+                // Get required services from DI.
+                discordClient = serviceProvider.GetRequiredService<DiscordShardedClient>();
+                audioService = serviceProvider.GetRequiredService<IAudioService>();
+            }
+            catch
+            {
+                throw new Exception();
+            }
+            finally
+            {
+                bool disposed = false;
+                if (disposed == true)
                 {
-                    Token = ConfigurationHandler.Configuration.Token,
-                    Intents = DiscordIntents.GuildMessages | DiscordIntents.GuildVoiceStates | DiscordIntents.Guilds,
-                }))
-
-                .AddSingleton(new LavalinkConfiguration())
-
-                .AddSingleton<MusicService>()
-                .BuildServiceProvider();
-
-            // Get required services from DI.
-            discordShardedClient = serviceProvider.GetRequiredService<DiscordShardedClient>();
-            lavalinkConfiguration = serviceProvider.GetRequiredService<LavalinkConfiguration>();
+                    serviceProvider.Dispose();
+                }
+            }
         }
 
         /// <summary>
@@ -45,10 +88,10 @@ namespace Suruga.Client
         /// <returns>[<see cref="Task"/>] An asynchronous operation.</returns>
         public async Task RunAsync()
         {
-            await InitializeEvents();
-            await InitializeCommandHandler();
+            await InitializeEventsAsync();
+            await InitializeCommandHandlerAsync();
 
-            await discordShardedClient.StartAsync();
+            await discordClient.StartAsync();
             await Task.Delay(-1);
         }
 
@@ -56,38 +99,38 @@ namespace Suruga.Client
         /// Initializes the bot's events.
         /// </summary>
         /// <returns>[<see cref="Task"/>] An asynchronous operation.</returns>
-        private async Task InitializeEvents()
+        private Task InitializeEventsAsync()
         {
-            // DSharpPlus events.
-            discordShardedClient.Ready += async (discordShardedClient, args) =>
+            discordClient.Ready += async (discordShardedClient, args) =>
             {
-                await Task.Factory.StartNew(async () =>
+                using Task onReadyEventInitialization = await Task.Factory.StartNew(async () =>
                 {
-                    await discordShardedClient.UpdateStatusAsync(new DiscordActivity(ConfigurationHandler.Configuration.Activity, ConfigurationHandler.Configuration.ActivityType));
-
-                    // Initialize Lavalink and connect to it.
-                    LavalinkExtension lavalinkExtension = discordShardedClient.UseLavalink();
-                    await lavalinkExtension.ConnectAsync(lavalinkConfiguration);
+                    await discordClient.UpdateStatusAsync(new DiscordActivity(ConfigurationHandler.Configuration.Activity, ConfigurationHandler.Configuration.ActivityType));
+                    await audioService.InitializeAsync();
                 });
             };
 
-            await Task.CompletedTask;
+            return Task.CompletedTask;
         }
 
         /// <summary>
         /// Initializes the default command handler.
-        /// </summary>
         /// <returns>[<see cref="Task"/>] An asynchronous operation.</returns>
-        private async Task InitializeCommandHandler()
+        /// </summary>
+        private async Task InitializeCommandHandlerAsync()
         {
-            IReadOnlyDictionary<int, CommandsNextExtension> commandsNextExtension = await discordShardedClient.UseCommandsNextAsync(new CommandsNextConfiguration()
+            IReadOnlyDictionary<int, CommandsNextExtension> commandsNext = await discordClient.UseCommandsNextAsync(new CommandsNextConfiguration()
             {
                 StringPrefixes = new[] { ConfigurationHandler.Configuration.CommandPrefix },
                 IgnoreExtraArguments = true,
                 Services = serviceProvider,
+                CaseSensitive = true,
             });
 
-            commandsNextExtension.Values.ToList().ForEach(x => x.RegisterCommands<Music>());
+            foreach (CommandsNextExtension commands in commandsNext.Values)
+            {
+                commands.RegisterCommands(Assembly.GetExecutingAssembly());
+            }
         }
     }
 }
