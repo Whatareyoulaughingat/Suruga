@@ -2,6 +2,7 @@
 using System.IO;
 using System.Text.Json;
 using System.Threading;
+using System.Threading.Tasks;
 using DSharpPlus.Entities;
 
 namespace Suruga.Handlers
@@ -19,16 +20,27 @@ namespace Suruga.Handlers
         public static ConfigurationData Configuration { get; set; }
 
         /// <summary>
+        /// Initializes the configuration handler by serializing or deserializing (or both) the values required to run this bot.
+        /// </summary>
+        /// <returns>[<see cref="Task"/>] An asynchronous operation.</returns>
+        public async Task InitializeAsync()
+        {
+            await SerializeConfigurationAsync();
+            await DeserializeConfigurationAsync();
+        }
+
+        /// <summary>
         /// Serializes the configuration data from .NET types to a JSON format.
         /// </summary>
-        public void SerializeConfiguration()
+        /// <returns>[<see cref="Task"/>] An asynchronous operation.</returns>
+        private async Task SerializeConfigurationAsync()
         {
-            Directory.CreateDirectory($"C:\\Users\\{Environment.UserName}\\AppData\\Local\\Suruga");
-
             if (!File.Exists(configurationFilePath))
             {
-                string serializedData = JsonSerializer.Serialize(new ConfigurationData(), new JsonSerializerOptions() { WriteIndented = true });
-                File.WriteAllText(configurationFilePath, serializedData);
+                Directory.CreateDirectory($"C:\\Users\\{Environment.UserName}\\AppData\\Local\\Suruga");
+
+                await using Stream serializationStream = new FileStream(configurationFilePath, FileMode.Create, FileAccess.Write, FileShare.None, 4096, true);
+                await JsonSerializer.SerializeAsync(serializationStream, new ConfigurationData(), new JsonSerializerOptions() { WriteIndented = true });
 
                 Console.WriteLine($"A new configuration file has been generated in: {configurationFilePath}. Close the program, enter the appropriate details inside the file and re-open this program.");
                 Thread.Sleep(-1);
@@ -38,10 +50,11 @@ namespace Suruga.Handlers
         /// <summary>
         /// Deserializes the configuration data from a JSON format to .NET types.
         /// </summary>
-        public void DeserializeConfiguration()
+        /// <returns>[<see cref="Task"/>] An asynchronous operation.</returns>
+        private async Task DeserializeConfigurationAsync()
         {
-            string deserializedData = File.ReadAllText(configurationFilePath);
-            Configuration = JsonSerializer.Deserialize<ConfigurationData>(deserializedData);
+            await using Stream deserializationStream = new FileStream(configurationFilePath, FileMode.Open, FileAccess.Read, FileShare.None, 4096, true);
+            Configuration = await JsonSerializer.DeserializeAsync<ConfigurationData>(deserializationStream);
         }
     }
 
