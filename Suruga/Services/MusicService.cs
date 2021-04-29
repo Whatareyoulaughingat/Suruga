@@ -3,8 +3,10 @@ using System.Text;
 using System.Threading.Tasks;
 using DSharpPlus.Entities;
 using Lavalink4NET;
+using Lavalink4NET.Events;
 using Lavalink4NET.Player;
 using Lavalink4NET.Rest;
+using Suruga.Extensions;
 using Suruga.Handlers;
 
 namespace Suruga.Services
@@ -26,9 +28,7 @@ namespace Suruga.Services
             QueuedLavalinkPlayer player = audioService.GetPlayer<QueuedLavalinkPlayer>(member.Guild.Id)
                 ?? await audioService.JoinAsync<QueuedLavalinkPlayer>(member.Guild.Id, member.VoiceState.Channel.Id, true);
 
-            audioService.TrackEnd += (sender, trackEndEventArgs) => player.OnTrackEndAsync(trackEndEventArgs);
-            audioService.TrackException += (sender, trackExceptionEventArgs) => player.OnTrackExceptionAsync(trackExceptionEventArgs);
-            audioService.TrackStuck += (sender, trackStuckEventArgs) => player.OnTrackStuckAsync(trackStuckEventArgs);
+            audioService.TrackEnd += async (sender, trackEndEventArgs) => await OnTrackEndAsync(trackEndEventArgs, channel, member);
 
             TrackLoadResponsePayload trackLoadResponse = await audioService.LoadTracksAsync(url, SearchMode.YouTube);
             if (trackLoadResponse.LoadType == TrackLoadType.LoadFailed || trackLoadResponse.LoadType == TrackLoadType.NoMatches)
@@ -217,15 +217,14 @@ namespace Suruga.Services
             }
         }
 
-        /*
-        public async Task<DiscordMessage> TrackFinishedReason(TrackEndEventArgs trackEndReason, DiscordChannel channel, DiscordMember member)
+        public async Task<DiscordMessage> OnTrackEndAsync(TrackEndEventArgs trackEndArgs, DiscordChannel channel, DiscordMember member)
         {
-            if (!trackEndReason.MayStartNext)
+            if (!trackEndArgs.MayStartNext)
             {
                 return null;
             }
 
-            if (!Queue.Dequeue(out LavalinkTrack queueableLavalinkTrack))
+            if (!trackEndArgs.Player.ToQueuedLavalinkPlayer().Queue.TryDequeue(out LavalinkTrack queueableLavalinkTrack))
             {
                 return null;
             }
@@ -235,9 +234,8 @@ namespace Suruga.Services
                 return await EmbedHandler.CreateErrorEmbed(channel, member, "Next item in queue is not a track!");
             }
 
-            await trackEndReason.Player.PlayAsync(lavalinkTrack);
+            await trackEndArgs.Player.ToQueuedLavalinkPlayer().PlayAsync(lavalinkTrack);
             return await EmbedHandler.CreateEmbed(channel, member, $"Now Playing: [{lavalinkTrack.Title}]({lavalinkTrack.Source}).");
         }
-        */
     }
 }
