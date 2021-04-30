@@ -7,9 +7,10 @@ using DSharpPlus.CommandsNext;
 using DSharpPlus.Entities;
 using Lavalink4NET;
 using Lavalink4NET.Cluster;
-using Lavalink4NET.DSharpPlus;
 using Microsoft.Extensions.DependencyInjection;
 using Suruga.Handlers;
+using Suruga.Lavalink;
+using Suruga.Lavalink.Wrappers;
 using Suruga.Services;
 
 namespace Suruga.Client
@@ -34,7 +35,7 @@ namespace Suruga.Client
                     }))
 
                     .AddSingleton<IAudioService, LavalinkCluster>()
-                    .AddSingleton<IDiscordClientWrapper, DiscordShardedClientWrapper>()
+                    .AddSingleton<DiscordShardedClientWrapper>()
                     .AddSingleton(new LavalinkClusterOptions
                     {
                         Nodes = new[]
