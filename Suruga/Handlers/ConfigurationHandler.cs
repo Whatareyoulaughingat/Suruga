@@ -42,6 +42,8 @@ namespace Suruga.Handlers
                 await using Stream serializationStream = new FileStream(configurationFilePath, FileMode.Create, FileAccess.Write, FileShare.None, 4096, true);
                 await JsonSerializer.SerializeAsync(serializationStream, new ConfigurationData(), new JsonSerializerOptions() { WriteIndented = true });
 
+                serializationStream.Position = 0;
+
                 Console.WriteLine($"A new configuration file has been generated in: {configurationFilePath}. Close the program, enter the appropriate details inside the file and re-open this program.");
                 Thread.Sleep(-1);
             }
