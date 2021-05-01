@@ -6,14 +6,14 @@ using Lavalink4NET;
 using Lavalink4NET.Events;
 using Lavalink4NET.Player;
 using Lavalink4NET.Rest;
-using Suruga.Extensions;
+using Lavalink4NET.Tracking;
 using Suruga.Handlers;
 
 namespace Suruga.Services
 {
-    public class MusicService
+    public sealed class MusicService
     {
-        public async Task<DiscordMessage> PlayAsync(DiscordChannel channel, DiscordMember member, IAudioService audioService, string url)
+        public async Task<DiscordMessage> PlayAsync(DiscordChannel channel, DiscordMember member, InactivityTrackingService inactivityTracking, IAudioService audioService, string url)
         {
             if (member.VoiceState == null || member.VoiceState.Channel == null)
             {
@@ -30,6 +30,8 @@ namespace Suruga.Services
 
             audioService.TrackEnd += async (sender, trackEndEventArgs) => await OnTrackEndAsync(trackEndEventArgs, channel, member);
 
+            // audioService.TrackStuck += async (sender, trackStuckEventArgs) => await OnTrackStuckAsync(trackStuckEventArgs, channel, member);
+            // audioService.TrackException += async (sender, trackExceptionEventArgs) => await OnTrackExceptionAsync(trackExceptionEventArgs, channel, member, inactivityTracking);
             TrackLoadResponsePayload trackLoadResponse = await audioService.LoadTracksAsync(url, SearchMode.YouTube);
             if (trackLoadResponse.LoadType == TrackLoadType.LoadFailed || trackLoadResponse.LoadType == TrackLoadType.NoMatches)
             {
@@ -199,7 +201,7 @@ namespace Suruga.Services
                 /*
                 Now we know if we have something in the queue worth replying with, so we iterate through all the Tracks in the queue.
                 Next Add the Track title and the url however make use of Discords Markdown feature to display everything neatly.
-                This trackNum variable is used to display the number in which the song is in place. (Start at 2 because we're including the current song.
+                This trackNum variable is used to display the number in which the song is in place. (Start at 2 because we're including the current song).
                 */
 
                 int trackNum = 2;
@@ -224,18 +226,46 @@ namespace Suruga.Services
                 return null;
             }
 
-            if (!trackEndArgs.Player.ToQueuedLavalinkPlayer().Queue.TryDequeue(out LavalinkTrack queueableLavalinkTrack))
+            if (!(trackEndArgs.Player as QueuedLavalinkPlayer).Queue.TryDequeue(out LavalinkTrack queuedLavalinkTrack))
             {
                 return null;
             }
 
-            if (queueableLavalinkTrack is not LavalinkTrack lavalinkTrack)
+            if (queuedLavalinkTrack is not LavalinkTrack lavalinkTrack)
             {
-                return await EmbedHandler.CreateErrorEmbed(channel, member, "Next item in queue is not a track!");
+                return await EmbedHandler.CreateErrorEmbed(channel, member, "Next item in queue is not a track.");
             }
 
-            await trackEndArgs.Player.ToQueuedLavalinkPlayer().PlayAsync(lavalinkTrack);
+            await trackEndArgs.Player.PlayAsync(lavalinkTrack);
             return await EmbedHandler.CreateEmbed(channel, member, $"Now Playing: [{lavalinkTrack.Title}]({lavalinkTrack.Source}).");
+        }
+
+        public async Task<DiscordMessage> OnTrackStuckAsync(TrackStuckEventArgs truckStuckArgs, DiscordChannel channel, DiscordMember member)
+        {
+            await truckStuckArgs.Player.StopAsync();
+
+            if (!(truckStuckArgs.Player as QueuedLavalinkPlayer).Queue.TryDequeue(out LavalinkTrack queuedLavalinkTrack))
+            {
+                return null;
+            }
+
+            if (queuedLavalinkTrack is not LavalinkTrack lavalinkTrack)
+            {
+                return await EmbedHandler.CreateErrorEmbed(channel, member, "Next item is queue is not a track.");
+            }
+
+            await truckStuckArgs.Player.PlayAsync(lavalinkTrack);
+            return await EmbedHandler.CreateEmbed(channel, member, "Playing the next track in the queue because the current one was stuck.");
+        }
+
+        public async Task<DiscordMessage> OnTrackExceptionAsync(TrackExceptionEventArgs trackExceptionArgs, DiscordChannel channel, DiscordMember member, InactivityTrackingService inactivityService)
+        {
+            await trackExceptionArgs.Player.DisconnectAsync();
+            await inactivityService.UntrackPlayerAsync(trackExceptionArgs.Player);
+
+            trackExceptionArgs.Player.Dispose();
+
+            return await EmbedHandler.CreateEmbed(channel, member, $"An exception has occured..\nHere's the error message: {trackExceptionArgs.Error}");
         }
     }
 }
