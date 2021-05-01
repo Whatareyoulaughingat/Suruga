@@ -20,6 +20,9 @@ namespace Suruga
             Console.Title = "Suruga";
 
             RunLavalink();
+
+            await Task.Delay(TimeSpan.FromSeconds(10.0));
+
             await new ConfigurationHandler().InitializeAsync();
             await new SurugaClient().RunAsync();
         }
