@@ -13,7 +13,7 @@ using Suruga.Extensions;
 
 namespace Suruga.Lavalink.Wrappers
 {
-    public class DiscordShardedClientWrapper : IDisposable
+    public class DiscordShardedClientWrapper : IDiscordClientWrapper, IDisposable
     {
         private readonly DiscordShardedClient shardedClient;
 
@@ -39,6 +39,11 @@ namespace Suruga.Lavalink.Wrappers
         public DiscordUser CurrentUser
         {
             get { return shardedClient.CurrentUser; }
+        }
+
+        public ulong CurrentUserId
+        {
+            get { return CurrentUser.Id; }
         }
 
         public async Task<IEnumerable<ulong>> GetChannelUsersAsync(ulong guildId, ulong voiceChannelId)
