@@ -1,6 +1,6 @@
-﻿using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
+using BooruSharp.Booru;
+using BooruSharp.Search.Post;
 using DSharpPlus.Entities;
 using NekosSharp;
 using Suruga.Handlers;
@@ -10,7 +10,14 @@ namespace Suruga.Services
     public class HentaiService
     {
         private readonly NsfwEndpoints_v3 nsfwEndpoints = new(new NekoClient("Suruga"));
+        private readonly Rule34 rule34 = new();
         private Request nsfwRequest;
+
+        public async Task<DiscordMessage> Rule34PostAsync(DiscordChannel channel, DiscordMember member, string tags)
+        {
+            SearchResult relatedImage = await rule34.GetRandomPostAsync(tags);
+            return await EmbedHandler.CreateEmbed(channel, member, string.Empty, relatedImage.FileUrl.AbsoluteUri);
+        }
 
         public async Task<DiscordMessage> AhegaoAsync(DiscordChannel channel, DiscordMember member)
         {

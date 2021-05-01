@@ -14,6 +14,13 @@ namespace Suruga.Modules
         public Hentai(HentaiService nsfwservice)
             => nsfwService = nsfwservice;
 
+        [Command("rule34")]
+        [Description("Posts an image from Rule34 that is related to the specified tags.")]
+        [RequireBotPermissions(Permissions.AccessChannels | Permissions.SendMessages | Permissions.EmbedLinks)]
+        [RequireUserPermissions(Permissions.AccessChannels | Permissions.SendMessages)]
+        public async Task Rule34PostCommand(CommandContext commandContext, [RemainingText] string tags)
+            => await nsfwService.Rule34PostAsync(commandContext.Channel, commandContext.Member, tags);
+
         [Command("ahegao")]
         [Description("Posts an image that is related to ahegao stuff.")]
         [RequireBotPermissions(Permissions.AccessChannels | Permissions.SendMessages | Permissions.EmbedLinks)]
