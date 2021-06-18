@@ -1,10 +1,9 @@
 ﻿using System;
-using System.ComponentModel;
 using System.Diagnostics;
-using System.Threading;
 using System.Threading.Tasks;
 using Suruga.Client;
-using Suruga.Handlers;
+using Suruga.Handlers.Application;
+using Suruga.Handlers.Lavalink;
 using Suruga.Handlers.Win32;
 
 namespace Suruga
@@ -21,9 +20,11 @@ namespace Suruga
 
             RunLavalink();
 
-            await Task.Delay(TimeSpan.FromSeconds(10.0));
+            await Task.Delay(TimeSpan.FromSeconds(3.5));
 
-            await new ConfigurationHandler().InitializeAsync();
+            await ConfigurationHandler.SerializeConfigurationAsync();
+            await ConfigurationHandler.DeserializeConfigurationAsync();
+
             await new SurugaClient().RunAsync();
         }
 
@@ -34,29 +35,16 @@ namespace Suruga
         /// </summary>
         private static void RunLavalink()
         {
-            Thread lavalinkThread = new(() =>
-            {
-                using Process lavalink = new();
-                lavalink.StartInfo.CreateNoWindow = true;
-                lavalink.StartInfo.UseShellExecute = true;
-                lavalink.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
-                lavalink.StartInfo.FileName = "\"" + LavalinkExecutionHandler.SearchForJava() + "\"";
-                lavalink.StartInfo.Arguments = "-jar Lavalink.jar";
-                lavalink.Start();
+            using Process lavalink = new();
+            lavalink.StartInfo.CreateNoWindow = true;
+            lavalink.StartInfo.UseShellExecute = true;
+            lavalink.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
+            lavalink.StartInfo.FileName = "\"" + LavalinkExecutionHandler.SearchForJava() + "\"";
+            lavalink.StartInfo.Arguments = "-jar Lavalink.jar";
+            lavalink.Start();
 
-                // Tracks the child process. If the parent process exits, the child does as well.
-                if (ProcessAttachmentHandler.JobHandle != IntPtr.Zero)
-                {
-                    bool success = ProcessAttachmentHandler.AssignProcessToJobObject(ProcessAttachmentHandler.JobHandle, lavalink.Handle);
-
-                    if (!success)
-                    {
-                        throw new Win32Exception("Failed to add Lavalink as a child of this process.");
-                    }
-                }
-            });
-
-            lavalinkThread.Start();
+            // Tracks the child process. If the parent process exits, the child does as well.
+            new ProcessAttachmentHandler().AddProcessAsChild(lavalink);
         }
     }
 }
