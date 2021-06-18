@@ -1,9 +1,10 @@
 ﻿using System;
 using System.Threading.Tasks;
+using DSharpPlus.CommandsNext;
 using DSharpPlus.Entities;
 using Suruga.Services;
 
-namespace Suruga.Handlers
+namespace Suruga.Handlers.Discord
 {
     public class EmbedHandler
     {
@@ -31,7 +32,7 @@ namespace Suruga.Handlers
             };
 
             embed.Build();
-            return await channel.SendMessageAsync(embed: embed);
+            return await channel.SendMessageAsync(embed);
         }
 
         /// <summary>
@@ -56,7 +57,7 @@ namespace Suruga.Handlers
             };
 
             errorEmbed.Build();
-            return await channel.SendMessageAsync(embed: errorEmbed);
+            return await channel.SendMessageAsync(errorEmbed);
         }
     }
 }

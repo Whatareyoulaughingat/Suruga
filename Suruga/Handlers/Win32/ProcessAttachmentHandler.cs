@@ -1,5 +1,6 @@
 ﻿using System;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 
 #pragma warning disable SA1602
@@ -108,6 +109,23 @@ namespace Suruga.Handlers.Win32
             finally
             {
                 Marshal.FreeHGlobal(extendedInfoPtr);
+            }
+        }
+
+        /// <summary>
+        /// Adds the specified process as a child of the parent application.
+        /// </summary>
+        /// <param name="process">The process that is going to be run as a child process of this program.</param>
+        public void AddProcessAsChild(Process process)
+        {
+            if (JobHandle != IntPtr.Zero)
+            {
+                bool success = AssignProcessToJobObject(JobHandle, process.Handle);
+
+                if (!success)
+                {
+                    throw new Win32Exception("Failed to add Lavalink as a child of this process.");
+                }
             }
         }
 

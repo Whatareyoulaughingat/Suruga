@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
-namespace Suruga.Handlers
+namespace Suruga.Handlers.Lavalink
 {
     public class LavalinkExecutionHandler
     {
@@ -16,12 +16,12 @@ namespace Suruga.Handlers
                 RecurseSubdirectories = true,
             });
 
-            if (!java.Where(x => x.Contains("jdk-13.0.2.8")).Any())
+            if (!java.Where(x => x.Contains("jdk-13")).Any())
             {
                 Console.WriteLine("Could not find Java 13. Install it before running this bot.");
             }
 
-            return java.Where(x => x.Contains("jdk-13.0.2")).First();
+            return java.Where(x => x.Contains("jdk-13")).First();
         }
     }
 }
