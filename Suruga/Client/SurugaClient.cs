@@ -7,10 +7,12 @@ using DSharpPlus.CommandsNext;
 using DSharpPlus.Entities;
 using Lavalink4NET;
 using Lavalink4NET.Cluster;
+using Lavalink4NET.DSharpPlus;
 using Lavalink4NET.Tracking;
 using Microsoft.Extensions.DependencyInjection;
-using Suruga.Handlers;
-using Suruga.Lavalink.Wrappers;
+using Microsoft.Extensions.Logging;
+using Suruga.Handlers.Application;
+using Suruga.Handlers.Discord;
 using Suruga.Services;
 
 namespace Suruga.Client
@@ -29,9 +31,10 @@ namespace Suruga.Client
             serviceProvider = new ServiceCollection()
                 .AddSingleton(new DiscordShardedClient(new DiscordConfiguration
                 {
-                    Token = ConfigurationHandler.Configuration.Token,
+                    Token = ConfigurationHandler.Data.Token,
                     Intents = DiscordIntents.GuildMessages | DiscordIntents.GuildVoiceStates | DiscordIntents.Guilds,
-                    LogTimestampFormat = "hh:mm:ss tt",
+                    LogTimestampFormat = "hh:mm:ss",
+                    MinimumLogLevel = LogLevel.Debug,
                 }))
 
                 .AddSingleton<InactivityTrackingService>()
@@ -67,6 +70,7 @@ namespace Suruga.Client
                 .AddSingleton<HentaiService>()
                 .AddSingleton<MiscService>()
                 .AddSingleton<MusicService>()
+                .AddSingleton<RoleService>()
                 .BuildServiceProvider();
 
             // Get required services from DI.
@@ -94,11 +98,11 @@ namespace Suruga.Client
         /// <returns>[<see cref="Task"/>] An asynchronous operation.</returns>
         private async Task InitializeEventsAsync()
         {
-            discordClient.Ready += async (discordShardedClient, readyArgs) =>
+            discordClient.Ready += async (_, _) =>
             {
                 await Task.Factory.StartNew(async () =>
                 {
-                    await discordClient.UpdateStatusAsync(new DiscordActivity(ConfigurationHandler.Configuration.Activity, ConfigurationHandler.Configuration.ActivityType));
+                    await discordClient.UpdateStatusAsync(new DiscordActivity(ConfigurationHandler.Data.Activity, ConfigurationHandler.Data.ActivityType));
                     await audioService.InitializeAsync();
 
                     inactivityTracking.BeginTracking();
@@ -116,7 +120,7 @@ namespace Suruga.Client
         {
             IReadOnlyDictionary<int, CommandsNextExtension> commandsNext = await discordClient.UseCommandsNextAsync(new CommandsNextConfiguration()
             {
-                StringPrefixes = new[] { ConfigurationHandler.Configuration.CommandPrefix },
+                StringPrefixes = new[] { ConfigurationHandler.Data.CommandPrefix },
                 IgnoreExtraArguments = true,
                 Services = serviceProvider,
                 CaseSensitive = true,
