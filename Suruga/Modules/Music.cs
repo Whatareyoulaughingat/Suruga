@@ -3,7 +3,6 @@ using DSharpPlus;
 using DSharpPlus.CommandsNext;
 using DSharpPlus.CommandsNext.Attributes;
 using Lavalink4NET;
-using Lavalink4NET.Tracking;
 using Suruga.Services;
 
 namespace Suruga.Modules
@@ -20,7 +19,7 @@ namespace Suruga.Modules
         [RequireBotPermissions(Permissions.AccessChannels | Permissions.EmbedLinks | Permissions.Speak | Permissions.UseVoice)]
         [RequireUserPermissions(Permissions.AccessChannels | Permissions.SendMessages | Permissions.UseVoice)]
         public async Task PlayCommand(CommandContext commandContext, [RemainingText] string url)
-            => await musicService.PlayAsync(commandContext.Channel, commandContext.Member, commandContext.Services.GetService(typeof(InactivityTrackingService)) as InactivityTrackingService, commandContext.Services.GetService(typeof(IAudioService)) as IAudioService, url);
+            => await musicService.PlayAsync(commandContext.Channel, commandContext.Member, commandContext.Services.GetService(typeof(IAudioService)) as IAudioService, url);
 
         [Command("leave")]
         [Description("Leaves the voice channel.")]

@@ -18,8 +18,15 @@ namespace Suruga.Modules
         [Description("Posts an image from Rule34 that is related to the specified tags.")]
         [RequireBotPermissions(Permissions.AccessChannels | Permissions.SendMessages | Permissions.EmbedLinks)]
         [RequireUserPermissions(Permissions.AccessChannels | Permissions.SendMessages)]
-        public async Task Rule34PostCommand(CommandContext commandContext, [RemainingText] string tags)
-            => await nsfwService.Rule34PostAsync(commandContext.Channel, commandContext.Member, tags);
+        public async Task Rule34Command(CommandContext commandContext, [RemainingText] string tags)
+            => await nsfwService.Rule34Async(commandContext.Channel, commandContext.Member, tags);
+
+        [Command("gelbooru")]
+        [Description("Posts an image from Gelbooru that is related to the specified tags.")]
+        [RequireBotPermissions(Permissions.AccessChannels | Permissions.SendMessages | Permissions.EmbedLinks)]
+        [RequireUserPermissions(Permissions.AccessChannels | Permissions.SendMessages)]
+        public async Task GelbooruCommand(CommandContext commandContext, [RemainingText] string tags)
+            => await nsfwService.GelbooruAsync(commandContext.Channel, commandContext.Member, tags);
 
         [Command("ahegao")]
         [Description("Posts an image that is related to ahegao stuff.")]
