@@ -1,7 +1,7 @@
 ﻿using System.Threading.Tasks;
 using DSharpPlus;
 using DSharpPlus.Entities;
-using Suruga.Handlers;
+using Suruga.Handlers.Discord;
 
 namespace Suruga.Services
 {

@@ -7,13 +7,13 @@ using Lavalink4NET.Events;
 using Lavalink4NET.Player;
 using Lavalink4NET.Rest;
 using Lavalink4NET.Tracking;
-using Suruga.Handlers;
+using Suruga.Handlers.Discord;
 
 namespace Suruga.Services
 {
     public sealed class MusicService
     {
-        public async Task<DiscordMessage> PlayAsync(DiscordChannel channel, DiscordMember member, InactivityTrackingService inactivityTracking, IAudioService audioService, string url)
+        public async Task<DiscordMessage> PlayAsync(DiscordChannel channel, DiscordMember member, IAudioService audioService, string url)
         {
             if (member.VoiceState == null || member.VoiceState.Channel == null)
             {
