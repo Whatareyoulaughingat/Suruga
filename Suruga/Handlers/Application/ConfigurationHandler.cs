@@ -7,7 +7,7 @@ using Suruga.GlobalData;
 
 namespace Suruga.Handlers.Application
 {
-    public class ConfigurationHandler
+    public static class ConfigurationHandler
     {
         /// <summary>
         /// Gets or sets the configuration data of this discord bot such as, its token, command prefix, etc.
@@ -22,22 +22,15 @@ namespace Suruga.Handlers.Application
         {
             if (!File.Exists(Paths.Configuration))
             {
-                Directory.CreateDirectory($"C:\\Users\\{Environment.UserName}\\AppData\\Local\\Suruga");
+                Directory.CreateDirectory(Paths.Base);
 
-                await using FileStream serializationStream = new(
-                    path: Paths.Configuration,
-                    mode: FileMode.Create,
-                    access: FileAccess.Write,
-                    share: FileShare.None,
-                    bufferSize: 4096,
-                    useAsync: true);
-
-                await JsonSerializer.SerializeAsync(serializationStream, new ConfigurationData(), new JsonSerializerOptions() { WriteIndented = true });
+                await using FileStream serializationStream = File.OpenWrite(Paths.Configuration);
+                await JsonSerializer.SerializeAsync(serializationStream, new ConfigurationData(), new JsonSerializerOptions { WriteIndented = true }).ConfigureAwait(false);
 
                 serializationStream.Position = 0;
 
-                await Console.Out.WriteLineAsync($"A new configuration file has been created in: {Paths.Configuration}. Edit the file and re-open this application.");
-                await Task.Delay(-1);
+                await Console.Out.WriteLineAsync($"A new configuration file has been created in: {Paths.Configuration}. Edit the file and re-open this application.").ConfigureAwait(false);
+                await Task.Delay(-1).ConfigureAwait(false);
             }
         }
 
@@ -47,14 +40,7 @@ namespace Suruga.Handlers.Application
         /// <returns>[<see cref="Task"/>] An asynchronous operation.</returns>
         public static async Task DeserializeConfigurationAsync()
         {
-            await using Stream deserializationStream = new FileStream(
-                path: Paths.Configuration,
-                mode: FileMode.Open,
-                access: FileAccess.Read,
-                share: FileShare.None,
-                bufferSize: 4096,
-                useAsync: true);
-
+            await using FileStream deserializationStream = File.OpenWrite(Paths.Configuration);
             Data = await JsonSerializer.DeserializeAsync<ConfigurationData>(deserializationStream);
         }
     }
@@ -68,6 +54,7 @@ namespace Suruga.Handlers.Application
             ActivityType = ActivityType.Playing;
             Activity = "Activity Status";
             CommandPrefix = "Prefix";
+            WaitForLavalinkToOpenInterval = 5;
         }
 
         /// <summary>
@@ -101,5 +88,10 @@ namespace Suruga.Handlers.Application
         /// Gets or sets the prefix (such as '?', '!', '-', '.'), that is going to be used in each command.
         /// </summary>
         public string CommandPrefix { get; set; }
+
+        /// <summary>
+        /// Gets or sets the interval the main application will wait for Lavalink.
+        /// </summary>
+        public int WaitForLavalinkToOpenInterval { get; set; }
     }
 }

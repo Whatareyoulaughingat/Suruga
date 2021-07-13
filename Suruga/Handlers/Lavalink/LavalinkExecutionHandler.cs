@@ -5,7 +5,7 @@ using System.Linq;
 
 namespace Suruga.Handlers.Lavalink
 {
-    public class LavalinkExecutionHandler
+    public static class LavalinkExecutionHandler
     {
         public static string SearchForJava()
         {
