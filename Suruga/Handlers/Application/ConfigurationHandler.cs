@@ -9,6 +9,8 @@ namespace Suruga.Handlers.Application
 {
     public static class ConfigurationHandler
     {
+        private static readonly Paths Paths;
+
         /// <summary>
         /// Gets or sets the configuration data of this discord bot such as, its token, command prefix, etc.
         /// </summary>
