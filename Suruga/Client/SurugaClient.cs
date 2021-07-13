@@ -57,20 +57,30 @@ namespace Suruga.Client
                                 WebSocketUri = "ws://localhost:2333",
                                 Password = "youshallnotpass",
                             },
+
+                            new LavalinkNodeOptions
+                            {
+                                RestUri = "http://localhost:2333",
+                                WebSocketUri = "ws://localhost:2333",
+                                Password = "youshallnotpass",
+                            },
+
+                            new LavalinkNodeOptions
+                            {
+                                RestUri = "http://localhost:2333",
+                                WebSocketUri = "ws://localhost:2333",
+                                Password = "youshallnotpass",
+                            },
                     },
 
                     StayOnline = true,
                 })
-                .AddSingleton(new InactivityTrackingOptions()
+                .AddSingleton(new InactivityTrackingOptions
                 {
                     DisconnectDelay = TimeSpan.FromMinutes(5.00),
                 })
 
-                .AddSingleton<ChannelService>()
-                .AddSingleton<HentaiService>()
-                .AddSingleton<MiscService>()
                 .AddSingleton<MusicService>()
-                .AddSingleton<RoleService>()
                 .BuildServiceProvider();
 
             // Get required services from DI.
@@ -85,11 +95,11 @@ namespace Suruga.Client
         /// <returns>[<see cref="Task"/>] An asynchronous operation.</returns>
         public async Task RunAsync()
         {
-            await InitializeCommandHandlerAsync();
-            await InitializeEventsAsync();
+            await InitializeCommandHandlerAsync().ConfigureAwait(false);
+            await InitializeEventsAsync().ConfigureAwait(false);
 
             await discordClient.StartAsync();
-            await Task.Delay(-1);
+            await Task.Delay(-1).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -109,7 +119,7 @@ namespace Suruga.Client
                 });
             };
 
-            await Task.CompletedTask;
+            await Task.CompletedTask.ConfigureAwait(false);
         }
 
         /// <summary>
