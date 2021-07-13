@@ -21,7 +21,7 @@ namespace Suruga.Handlers.Discord
                 Color = DiscordColor.Azure,
                 Description = description,
                 Timestamp = DateTimeOffset.Now,
-                Footer = new DiscordEmbedBuilder.EmbedFooter()
+                Footer = new DiscordEmbedBuilder.EmbedFooter
                 {
                     IconUrl = member.AvatarUrl,
                     Text = member.DisplayName,
@@ -48,7 +48,7 @@ namespace Suruga.Handlers.Discord
                 Description = description,
                 ImageUrl = imageUrl,
                 Timestamp = DateTimeOffset.Now,
-                Footer = new DiscordEmbedBuilder.EmbedFooter()
+                Footer = new DiscordEmbedBuilder.EmbedFooter
                 {
                     IconUrl = member.AvatarUrl,
                     Text = member.DisplayName,
@@ -73,7 +73,7 @@ namespace Suruga.Handlers.Discord
                 Color = DiscordColor.Red,
                 Description = description,
                 Timestamp = DateTimeOffset.Now,
-                Footer = new DiscordEmbedBuilder.EmbedFooter()
+                Footer = new DiscordEmbedBuilder.EmbedFooter
                 {
                     IconUrl = member.AvatarUrl,
                     Text = member.DisplayName,

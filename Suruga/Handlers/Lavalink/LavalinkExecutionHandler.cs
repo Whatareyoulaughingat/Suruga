@@ -9,7 +9,7 @@ namespace Suruga.Handlers.Lavalink
     {
         public static string SearchForJava()
         {
-            IEnumerable<string> java = Directory.EnumerateFiles($"C:\\Program Files", "*java.exe", new EnumerationOptions()
+            IEnumerable<string> java = Directory.EnumerateFiles($"C:\\Program Files", "*java.exe", new EnumerationOptions
             {
                 AttributesToSkip = FileAttributes.Hidden | FileAttributes.Compressed | FileAttributes.System,
                 IgnoreInaccessible = true,

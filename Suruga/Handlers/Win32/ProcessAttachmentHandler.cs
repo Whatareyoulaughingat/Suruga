@@ -112,6 +112,15 @@ namespace Suruga.Handlers.Win32
             }
         }
 
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+        public static extern IntPtr CreateJobObject(IntPtr lpJobAttributes, string name);
+
+        [DllImport("kernel32.dll")]
+        public static extern bool SetInformationJobObject(IntPtr job, JobObjectInfoType infoType, IntPtr lpJobObjectInfo, uint cbJobObjectInfoLength);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        public static extern bool AssignProcessToJobObject(IntPtr job, IntPtr process);
+
         /// <summary>
         /// Adds the specified process as a child of the parent application.
         /// </summary>
@@ -128,14 +137,5 @@ namespace Suruga.Handlers.Win32
                 }
             }
         }
-
-        [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
-        public static extern IntPtr CreateJobObject(IntPtr lpJobAttributes, string name);
-
-        [DllImport("kernel32.dll")]
-        public static extern bool SetInformationJobObject(IntPtr job, JobObjectInfoType infoType, IntPtr lpJobObjectInfo, uint cbJobObjectInfoLength);
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        public static extern bool AssignProcessToJobObject(IntPtr job, IntPtr process);
     }
 }

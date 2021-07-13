@@ -20,7 +20,7 @@ namespace Suruga
 
             RunLavalink();
 
-            await Task.Delay(TimeSpan.FromSeconds(ConfigurationHandler.Data.WaitForLavalinkToOpenInterval));
+            await Task.Delay(TimeSpan.FromSeconds(ConfigurationHandler.Data.WaitForLavalinkToOpenInterval)).ConfigureAwait(false);
 
             await ConfigurationHandler.SerializeConfigurationAsync();
             await ConfigurationHandler.DeserializeConfigurationAsync();

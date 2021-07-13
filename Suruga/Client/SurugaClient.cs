@@ -40,7 +40,7 @@ namespace Suruga.Client
                 .AddSingleton<InactivityTrackingService>()
                 .AddSingleton<IAudioService, LavalinkCluster>()
                 .AddSingleton<IDiscordClientWrapper, DiscordShardedClientWrapper>()
-                .AddSingleton(new LavalinkClusterOptions()
+                .AddSingleton(new LavalinkClusterOptions
                 {
                     Nodes = new[]
                     {
@@ -128,7 +128,7 @@ namespace Suruga.Client
         /// <returns>[<see cref="Task"/>] An asynchronous operation.</returns>
         private async Task InitializeCommandHandlerAsync()
         {
-            IReadOnlyDictionary<int, CommandsNextExtension> commandsNext = await discordClient.UseCommandsNextAsync(new CommandsNextConfiguration()
+            IReadOnlyDictionary<int, CommandsNextExtension> commandsNext = await discordClient.UseCommandsNextAsync(new CommandsNextConfiguration
             {
                 StringPrefixes = new[] { ConfigurationHandler.Data.CommandPrefix },
                 IgnoreExtraArguments = true,

@@ -6,7 +6,6 @@ using Lavalink4NET;
 using Lavalink4NET.Events;
 using Lavalink4NET.Player;
 using Lavalink4NET.Rest;
-using Lavalink4NET.Tracking;
 using Suruga.Handlers.Discord;
 
 namespace Suruga.Services
@@ -29,9 +28,8 @@ namespace Suruga.Services
                 ?? await audioService.JoinAsync<QueuedLavalinkPlayer>(member.Guild.Id, member.VoiceState.Channel.Id, true);
 
             audioService.TrackEnd += async (sender, trackEndEventArgs) => await OnTrackEndAsync(trackEndEventArgs, channel, member).ConfigureAwait(false);
+            audioService.TrackStuck += async (sender, trackStuckEventArgs) => await OnTrackStuckAsync(trackStuckEventArgs, channel, member).ConfigureAwait(false);
 
-            // audioService.TrackStuck += async (sender, trackStuckEventArgs) => await OnTrackStuckAsync(trackStuckEventArgs, channel, member);
-            // audioService.TrackException += async (sender, trackExceptionEventArgs) => await OnTrackExceptionAsync(trackExceptionEventArgs, channel, member, inactivityTracking);
             TrackLoadResponsePayload trackLoadResponse = await audioService.LoadTracksAsync(url, SearchMode.YouTube);
             if (trackLoadResponse.LoadType == TrackLoadType.LoadFailed || trackLoadResponse.LoadType == TrackLoadType.NoMatches)
             {
@@ -256,16 +254,6 @@ namespace Suruga.Services
 
             await truckStuckArgs.Player.PlayAsync(lavalinkTrack);
             return await EmbedHandler.CreateEmbed(channel, member, "Playing the next track in the queue because the current one was stuck.");
-        }
-
-        public async Task<DiscordMessage> OnTrackExceptionAsync(TrackExceptionEventArgs trackExceptionArgs, DiscordChannel channel, DiscordMember member, InactivityTrackingService inactivityService)
-        {
-            await trackExceptionArgs.Player.DisconnectAsync();
-            await inactivityService.UntrackPlayerAsync(trackExceptionArgs.Player);
-
-            trackExceptionArgs.Player.Dispose();
-
-            return await EmbedHandler.CreateEmbed(channel, member, $"An exception has occured..\nHere's the error message: {trackExceptionArgs.Error}");
         }
     }
 }
