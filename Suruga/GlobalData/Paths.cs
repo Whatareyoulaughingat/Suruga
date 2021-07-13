@@ -2,10 +2,31 @@
 
 namespace Suruga.GlobalData
 {
-    public struct Paths
+    public struct Paths : IEquatable<Paths>
     {
-        public static readonly string Base = $"{Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)}\\Suruga";
+        public readonly string Base
+        {
+            get => $"{Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)}\\Suruga";
+        }
 
-        public static readonly string Configuration = $"{Base}\\Configuration.json";
+        public readonly string Configuration
+        {
+            get => $"{Base}\\Configuration.json";
+        }
+
+        public static bool operator ==(Paths left, Paths right)
+            => Equals(left, right);
+
+        public static bool operator !=(Paths left, Paths right)
+            => !Equals(left, right);
+
+        public bool Equals(Paths other)
+            => (Base, Configuration) == (other.Base, other.Configuration);
+
+        public override bool Equals(object obj)
+            => (obj is Paths paths) && Equals(paths);
+
+        public override int GetHashCode()
+            => (Base, Configuration).GetHashCode();
     }
 }
