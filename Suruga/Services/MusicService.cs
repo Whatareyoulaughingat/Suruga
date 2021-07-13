@@ -28,7 +28,7 @@ namespace Suruga.Services
             QueuedLavalinkPlayer player = audioService.GetPlayer<QueuedLavalinkPlayer>(member.Guild.Id)
                 ?? await audioService.JoinAsync<QueuedLavalinkPlayer>(member.Guild.Id, member.VoiceState.Channel.Id, true);
 
-            audioService.TrackEnd += async (sender, trackEndEventArgs) => await OnTrackEndAsync(trackEndEventArgs, channel, member);
+            audioService.TrackEnd += async (sender, trackEndEventArgs) => await OnTrackEndAsync(trackEndEventArgs, channel, member).ConfigureAwait(false);
 
             // audioService.TrackStuck += async (sender, trackStuckEventArgs) => await OnTrackStuckAsync(trackStuckEventArgs, channel, member);
             // audioService.TrackException += async (sender, trackExceptionEventArgs) => await OnTrackExceptionAsync(trackExceptionEventArgs, channel, member, inactivityTracking);
@@ -212,7 +212,7 @@ namespace Suruga.Services
                     builderDescription.Append($"\n{trackNum}: **{track.Title}**.\n");
                     trackNum++;
 
-                    await Task.CompletedTask;
+                    await Task.CompletedTask.ConfigureAwait(false);
                 }
 
                 return await EmbedHandler.CreateEmbed(channel, member, $"Currently playing: [{player.CurrentTrack.Title}]({player.CurrentTrack.Source}).\n{builderDescription}");
