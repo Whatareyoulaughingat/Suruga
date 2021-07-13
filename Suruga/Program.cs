@@ -10,6 +10,9 @@ namespace Suruga
 {
     public class Program
     {
+        protected Program()
+            => RunLavalink();
+
         /// <summary>
         /// The main method where execution of this bot starts.
         /// </summary>
@@ -17,10 +20,6 @@ namespace Suruga
         private static async Task Main()
         {
             Console.Title = "Suruga";
-
-            RunLavalink();
-
-            await Task.Delay(TimeSpan.FromSeconds(ConfigurationHandler.Data.WaitForLavalinkToOpenInterval)).ConfigureAwait(false);
 
             await ConfigurationHandler.SerializeConfigurationAsync();
             await ConfigurationHandler.DeserializeConfigurationAsync();
