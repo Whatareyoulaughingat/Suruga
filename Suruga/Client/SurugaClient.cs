@@ -31,10 +31,10 @@ namespace Suruga.Client
             serviceProvider = new ServiceCollection()
                 .AddSingleton(new DiscordShardedClient(new DiscordConfiguration
                 {
-                    Token = ConfigurationHandler.Data.Token,
+                    Token = ConfigurationHandler.Data.BotToken,
                     Intents = DiscordIntents.GuildMessages | DiscordIntents.GuildVoiceStates | DiscordIntents.Guilds,
                     LogTimestampFormat = "hh:mm:ss",
-                    MinimumLogLevel = LogLevel.Debug,
+                    MinimumLogLevel = LogLevel.Information,
                 }))
 
                 .AddSingleton<InactivityTrackingService>()
@@ -112,7 +112,7 @@ namespace Suruga.Client
             {
                 await Task.Factory.StartNew(async () =>
                 {
-                    await discordClient.UpdateStatusAsync(new DiscordActivity(ConfigurationHandler.Data.Activity, ConfigurationHandler.Data.ActivityType));
+                    await discordClient.UpdateStatusAsync(new DiscordActivity(ConfigurationHandler.Data.Activity, Enum.Parse<ActivityType>(ConfigurationHandler.Data.ActivityType)));
                     await audioService.InitializeAsync();
 
                     inactivityTracking.BeginTracking();

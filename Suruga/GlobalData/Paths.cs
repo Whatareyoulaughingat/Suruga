@@ -11,7 +11,7 @@ namespace Suruga.GlobalData
 
         public readonly string Configuration
         {
-            get => $"{Base}\\Configuration.json";
+            get => $"{Base}\\Configuration.yml";
         }
 
         public static bool operator ==(Paths left, Paths right)

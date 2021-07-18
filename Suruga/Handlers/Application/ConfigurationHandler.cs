@@ -1,35 +1,48 @@
 ﻿using System;
 using System.IO;
-using System.Text.Json;
+using System.Reflection;
 using System.Threading.Tasks;
-using DSharpPlus.Entities;
+using SharpYaml.Serialization;
 using Suruga.GlobalData;
 
 namespace Suruga.Handlers.Application
 {
-    public static class ConfigurationHandler
+    public class ConfigurationHandler
     {
-        private static readonly Paths Paths;
+        private readonly Serializer serializer = new();
 
         /// <summary>
         /// Gets or sets the configuration data of this discord bot such as, its token, command prefix, etc.
         /// </summary>
-        public static ConfigurationData Data { get; set; }
+        public static ConfigurationData Data { get; set; } = new();
+
+        private Paths Paths { get; }
 
         /// <summary>
-        /// Serializes the configuration data from .NET types to a JSON format.
+        /// Serializes the configuration data from .NET types to a YML format.
         /// </summary>
         /// <returns>[<see cref="Task"/>] An asynchronous operation.</returns>
-        public static async Task SerializeConfigurationAsync()
+        public async Task SerializeAsync()
         {
             if (!File.Exists(Paths.Configuration))
             {
+                // Try to create the base directory just in case.
                 Directory.CreateDirectory(Paths.Base);
 
-                await using FileStream serializationStream = File.OpenWrite(Paths.Configuration);
-                await JsonSerializer.SerializeAsync(serializationStream, new ConfigurationData(), new JsonSerializerOptions { WriteIndented = true }).ConfigureAwait(false);
+                // Serialize the ConfigData class and inform the user that the config has been created.
+                string serializedData = serializer.Serialize(new
+                {
+                    Data.BotToken,
+                    Data.CommandPrefix,
+                    Data.WaitForLavalinkToOpenInterval,
+                    Data.ActivityType,
+                    Data.Activity,
+                    Data.LavalinkFilePath,
+                    Data.SuccessfulEmbedHexColor,
+                    Data.UnsuccessfulEmbedHexColor,
+                });
 
-                serializationStream.Position = 0;
+                await File.WriteAllTextAsync(Paths.Configuration, serializedData);
 
                 await Console.Out.WriteLineAsync($"A new configuration file has been created in: {Paths.Configuration}. Edit the file and re-open this application.").ConfigureAwait(false);
                 await Task.Delay(-1).ConfigureAwait(false);
@@ -37,13 +50,14 @@ namespace Suruga.Handlers.Application
         }
 
         /// <summary>
-        /// Deserializes the configuration data from a JSON format to .NET types.
+        /// Deserializes the configuration data from a YML format to .NET types.
         /// </summary>
         /// <returns>[<see cref="Task"/>] An asynchronous operation.</returns>
-        public static async Task DeserializeConfigurationAsync()
+        public async Task DeserializeAsync()
         {
-            await using FileStream deserializationStream = File.OpenWrite(Paths.Configuration);
-            Data = await JsonSerializer.DeserializeAsync<ConfigurationData>(deserializationStream);
+            // Deserialize the config file.
+            await using FileStream deserializationStream = File.OpenRead(Paths.Configuration);
+            Data = serializer.Deserialize<ConfigurationData>(deserializationStream);
         }
     }
 
@@ -52,48 +66,30 @@ namespace Suruga.Handlers.Application
     {
         public ConfigurationData()
         {
-            Token = "Discord Token";
-            ActivityType = ActivityType.Playing;
-            Activity = "Activity Status";
-            CommandPrefix = "Prefix";
-            WaitForLavalinkToOpenInterval = 5;
+            BotToken = "Insert a token for the bot to work.";
+            CommandPrefix = "?";
+            WaitForLavalinkToOpenInterval = "5";
+            ActivityType = DSharpPlus.Entities.ActivityType.Playing.ToString();
+            Activity = "A description of the bot's activity.";
+            LavalinkFilePath = $"{Directory.GetCurrentDirectory()}\\Lavalink.jar";
+            SuccessfulEmbedHexColor = "#007fff";
+            UnsuccessfulEmbedHexColor = "#ff0000";
         }
 
-        /// <summary>
-        /// Gets or sets the token required for this bot.
-        /// </summary>
-        public string Token { get; set; }
+        public string BotToken { get; set; }
 
-        /// <summary>
-        /// Gets or sets the activity type of this bot that will show under its name.
-        /// <para></para>
-        /// 0 = <see cref="ActivityType.Playing"/>.
-        /// <para></para>
-        /// 1 = <see cref="ActivityType.Streaming"/>.
-        /// <para></para>
-        /// 2 = <see cref="ActivityType.ListeningTo"/>.
-        /// <para></para>
-        /// 3 = <see cref="ActivityType.Watching"/>.
-        /// <para></para>
-        /// 4 = <see cref="ActivityType.Custom"/>.
-        /// <para></para>
-        /// 5 = <see cref="ActivityType.Competing"/>.
-        /// </summary>
-        public ActivityType ActivityType { get; set; }
-
-        /// <summary>
-        /// Gets or sets the name of the activity that will show under its name alongside the <see cref="ActivityType"/>.
-        /// </summary>
-        public string Activity { get; set; }
-
-        /// <summary>
-        /// Gets or sets the prefix (such as '?', '!', '-', '.'), that is going to be used in each command.
-        /// </summary>
         public string CommandPrefix { get; set; }
 
-        /// <summary>
-        /// Gets or sets the interval the main application will wait for Lavalink.
-        /// </summary>
-        public int WaitForLavalinkToOpenInterval { get; set; }
+        public string WaitForLavalinkToOpenInterval { get; set; }
+
+        public string ActivityType { get; set; }
+
+        public string Activity { get; set; }
+
+        public string LavalinkFilePath { get; set; }
+
+        public string SuccessfulEmbedHexColor { get; set; }
+
+        public string UnsuccessfulEmbedHexColor { get; set; }
     }
 }
