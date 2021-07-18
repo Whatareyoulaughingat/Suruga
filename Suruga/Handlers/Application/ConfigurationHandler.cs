@@ -1,6 +1,5 @@
 ﻿using System;
 using System.IO;
-using System.Reflection;
 using System.Threading.Tasks;
 using SharpYaml.Serialization;
 using Suruga.GlobalData;
@@ -16,7 +15,7 @@ namespace Suruga.Handlers.Application
         /// </summary>
         public static ConfigurationData Data { get; set; } = new();
 
-        private Paths Paths { get; }
+        private Paths Paths { get; set; } = default;
 
         /// <summary>
         /// Serializes the configuration data from .NET types to a YML format.
