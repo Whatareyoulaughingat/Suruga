@@ -10,7 +10,7 @@ using Suruga.Handlers.Discord;
 
 namespace Suruga.Services
 {
-    public sealed class MusicService
+    public class MusicService
     {
         public async Task<DiscordMessage> PlayAsync(DiscordChannel channel, DiscordMember member, IAudioService audioService, string url)
         {
@@ -41,11 +41,11 @@ namespace Suruga.Services
             if ((player.CurrentTrack != null && player.State == PlayerState.Playing) || player.State == PlayerState.Paused)
             {
                 player.Queue.Add(track);
-                return await EmbedHandler.CreateEmbed(channel, member, $"{track.Title} has been added to the queue.");
+                return await EmbedHandler.CreateEmbed(channel, member, $"{track.Title} has been added to the queue.", null);
             }
 
             await player.PlayAsync(track);
-            return await EmbedHandler.CreateEmbed(channel, member, $"Now Playing [{track.Title}]({track.Source})");
+            return await EmbedHandler.CreateEmbed(channel, member, $"Now Playing [{track.Title}]({track.Source})", null);
         }
 
         public async Task<DiscordMessage> LeaveAsync(DiscordChannel channel, DiscordMember member, IAudioService audioService)
@@ -58,7 +58,7 @@ namespace Suruga.Services
             QueuedLavalinkPlayer player = audioService.GetPlayer<QueuedLavalinkPlayer>(member.Guild.Id);
 
             await player.DisconnectAsync();
-            return await EmbedHandler.CreateEmbed(channel, member, $"Left **{member.VoiceState.Channel.Name}**");
+            return await EmbedHandler.CreateEmbed(channel, member, $"Left **{member.VoiceState.Channel.Name}**", null);
         }
 
         public async Task<DiscordMessage> StopAsync(DiscordChannel channel, DiscordMember member, IAudioService audioService)
@@ -76,7 +76,7 @@ namespace Suruga.Services
             }
 
             await player.StopAsync();
-            return await EmbedHandler.CreateEmbed(channel, member, "Stopped the playback.");
+            return await EmbedHandler.CreateEmbed(channel, member, "Stopped the playback.", null);
         }
 
         public async Task<DiscordMessage> PauseAsync(DiscordChannel channel, DiscordMember member, IAudioService audioService)
@@ -94,7 +94,7 @@ namespace Suruga.Services
             }
 
             await player.PauseAsync();
-            return await EmbedHandler.CreateEmbed(channel, member, $"Paused [{player.CurrentTrack.Title}]({player.CurrentTrack.Source})");
+            return await EmbedHandler.CreateEmbed(channel, member, $"Paused [{player.CurrentTrack.Title}]({player.CurrentTrack.Source})", null);
         }
 
         public async Task<DiscordMessage> ResumeAsync(DiscordChannel channel, DiscordMember member, IAudioService audioService)
@@ -112,7 +112,7 @@ namespace Suruga.Services
             }
 
             await player.ResumeAsync();
-            return await EmbedHandler.CreateEmbed(channel, member, $"Resumed [{player.CurrentTrack.Title}]({player.CurrentTrack.Source})");
+            return await EmbedHandler.CreateEmbed(channel, member, $"Resumed [{player.CurrentTrack.Title}]({player.CurrentTrack.Source})", null);
         }
 
         public async Task<DiscordMessage> UpdateVolumeAsync(DiscordChannel channel, DiscordMember member, IAudioService audioService, float volume)
@@ -130,7 +130,7 @@ namespace Suruga.Services
             QueuedLavalinkPlayer player = audioService.GetPlayer<QueuedLavalinkPlayer>(member.Guild.Id);
 
             await player.SetVolumeAsync(volume, force: true);
-            return await EmbedHandler.CreateEmbed(channel, member, $"Updated volume to {volume}");
+            return await EmbedHandler.CreateEmbed(channel, member, $"Updated volume to {volume}", null);
         }
 
         public async Task<DiscordMessage> SkipAsync(DiscordChannel channel, DiscordMember member, IAudioService audioService, int skipCount = 1)
@@ -160,7 +160,7 @@ namespace Suruga.Services
 
             await player.SkipAsync(skipCount);
             await player.PlayAsync(queueableLavalinkTrack);
-            return await EmbedHandler.CreateEmbed(channel, member, "Skipped the track.");
+            return await EmbedHandler.CreateEmbed(channel, member, "Skipped the track.", null);
         }
 
         public async Task<DiscordMessage> ShuffleAsync(DiscordChannel channel, DiscordMember member, IAudioService audioService)
@@ -178,7 +178,7 @@ namespace Suruga.Services
             }
 
             player.Queue.Shuffle();
-            return await EmbedHandler.CreateEmbed(channel, member, "Shuffled the queue.");
+            return await EmbedHandler.CreateEmbed(channel, member, "Shuffled the queue.", null);
         }
 
         public async Task<DiscordMessage> ListQueueAsync(DiscordChannel channel, DiscordMember member, IAudioService audioService)
@@ -192,7 +192,7 @@ namespace Suruga.Services
 
             if (!player.Queue.Any() && player.CurrentTrack != null)
             {
-                return await EmbedHandler.CreateEmbed(channel, member, $"Currently Playing: [{player.CurrentTrack.Title}]({player.CurrentTrack.Source}).\nNothing else is queued.");
+                return await EmbedHandler.CreateEmbed(channel, member, $"Currently Playing: [{player.CurrentTrack.Title}]({player.CurrentTrack.Source}).\nNothing else is queued.", null);
             }
             else
             {
@@ -213,7 +213,7 @@ namespace Suruga.Services
                     await Task.CompletedTask.ConfigureAwait(false);
                 }
 
-                return await EmbedHandler.CreateEmbed(channel, member, $"Currently playing: [{player.CurrentTrack.Title}]({player.CurrentTrack.Source}).\n{builderDescription}");
+                return await EmbedHandler.CreateEmbed(channel, member, $"Currently playing: [{player.CurrentTrack.Title}]({player.CurrentTrack.Source}).\n{builderDescription}", null);
             }
         }
 
@@ -235,7 +235,7 @@ namespace Suruga.Services
             }
 
             await trackEndArgs.Player.PlayAsync(lavalinkTrack);
-            return await EmbedHandler.CreateEmbed(channel, member, $"Now Playing: [{lavalinkTrack.Title}]({lavalinkTrack.Source}).");
+            return await EmbedHandler.CreateEmbed(channel, member, $"Now Playing: [{lavalinkTrack.Title}]({lavalinkTrack.Source}).", null);
         }
 
         public async Task<DiscordMessage> OnTrackStuckAsync(TrackStuckEventArgs truckStuckArgs, DiscordChannel channel, DiscordMember member)
@@ -253,7 +253,7 @@ namespace Suruga.Services
             }
 
             await truckStuckArgs.Player.PlayAsync(lavalinkTrack);
-            return await EmbedHandler.CreateEmbed(channel, member, "Playing the next track in the queue because the current one was stuck.");
+            return await EmbedHandler.CreateEmbed(channel, member, "Playing the next track in the queue because the current one was stuck.", null);
         }
     }
 }
