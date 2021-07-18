@@ -8,9 +8,7 @@ namespace Suruga.Handlers.Lavalink
 {
     public static class LavalinkExecutionHandler
     {
-        public static string Java13Path { get; set; }
-
-        public static async Task SearchForJava()
+        public static string SearchForJavaAsync()
         {
             IEnumerable<string> java = Directory.EnumerateFiles($"C:\\Program Files", "*java.exe", new EnumerationOptions
             {
@@ -21,11 +19,11 @@ namespace Suruga.Handlers.Lavalink
 
             if (!java.Where(x => x.Contains("jdk-13")).Any())
             {
-                await Console.Out.WriteLineAsync("Could not find Java 13. Install it before running this bot.");
+                Console.WriteLine("Could not find Java 13. Install it before running this application.");
+                Task.Delay(-1);
             }
 
-            Java13Path = java.Where(x => x.Contains("jdk-13")).First();
-            await Task.CompletedTask;
+            return java.Where(x => x.Contains("jdk-13")).First();
         }
     }
 }
