@@ -9,7 +9,7 @@ using Suruga.Handlers.Win32;
 
 namespace Suruga
 {
-    public class Program
+    public static class Program
     {
         /// <summary>
         /// The main method where execution of this bot starts.
@@ -23,8 +23,8 @@ namespace Suruga
             await configHandler.SerializeAsync();
             await configHandler.DeserializeAsync();
 
-            await RunLavalink();
-            await Task.Delay(TimeSpan.FromSeconds(int.Parse(ConfigurationHandler.Data.WaitForLavalinkToOpenInterval)));
+            await RunLavalink().ConfigureAwait(false);
+            await Task.Delay(TimeSpan.FromSeconds(int.Parse(ConfigurationHandler.Data.WaitForLavalinkToOpenInterval))).ConfigureAwait(false);
 
             await new SurugaClient().RunAsync();
         }
@@ -51,7 +51,7 @@ namespace Suruga
             }
             catch (Win32Exception)
             {
-                await Console.Out.WriteLineAsync("Could not find Lavalink. Place it where this application is or configure a custom file path in the congiguration file if you have it or download it from: https://github.com/freyacodes/Lavalink and follow the installation guide.");
+                await Console.Out.WriteLineAsync("Could not find Lavalink. Place it where this application is or configure a custom file path in the congiguration file if you have it or download it from: https://github.com/freyacodes/Lavalink and follow the installation guide.").ConfigureAwait(false);
                 await Task.Delay(-1).ConfigureAwait(false);
             }
         }

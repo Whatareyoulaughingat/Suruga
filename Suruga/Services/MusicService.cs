@@ -148,7 +148,7 @@ namespace Suruga.Services
                 return await EmbedHandler.CreateErrorEmbed(channel, member, "There isn't any track in the queue in order to skip the current one.");
             }
 
-            if (queueableLavalinkTrack is not LavalinkTrack)
+            if (queueableLavalinkTrack is null)
             {
                 return await EmbedHandler.CreateErrorEmbed(channel, member, $"The specific track is invalid.");
             }

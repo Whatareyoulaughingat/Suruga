@@ -42,7 +42,7 @@ namespace Suruga.Handlers.Application
                     Data.UnsuccessfulEmbedHexColor,
                 });
 
-                await File.WriteAllTextAsync(Paths.Configuration, serializedData);
+                await File.WriteAllTextAsync(Paths.Configuration, serializedData).ConfigureAwait(false);
 
                 await Console.Out.WriteLineAsync($"A new configuration file has been created in: {Paths.Configuration}. Edit the file and re-open this application.").ConfigureAwait(false);
                 await Task.Delay(-1).ConfigureAwait(false);
