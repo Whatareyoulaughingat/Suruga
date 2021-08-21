@@ -249,7 +249,7 @@ namespace Suruga.Services
 
             if (queuedLavalinkTrack is not LavalinkTrack lavalinkTrack)
             {
-                return await EmbedHandler.CreateErrorEmbed(channel, member, "Next item is queue is not a track.");
+                return await EmbedHandler.CreateErrorEmbed(channel, member, "Next item in queue is not a track.");
             }
 
             await truckStuckArgs.Player.PlayAsync(lavalinkTrack);
