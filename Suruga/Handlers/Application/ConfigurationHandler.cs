@@ -1,47 +1,28 @@
-﻿using System;
-using System.IO;
-using System.Threading.Tasks;
-using SharpYaml.Serialization;
+﻿using System.Text.Json;
 using Suruga.GlobalData;
 
 namespace Suruga.Handlers.Application
 {
     public class ConfigurationHandler
     {
-        private readonly Serializer serializer = new();
-
         /// <summary>
         /// Gets or sets the configuration data of this discord bot such as, its token, command prefix, etc.
         /// </summary>
-        public static ConfigurationData Data { get; set; } = new();
-
-        private Paths Paths { get; set; } = default;
+        public static ConfigurationData CurrentConfigurationDataInstance { get; set; }
 
         /// <summary>
-        /// Serializes the configuration data from .NET types to a YML format.
+        /// Serializes .NET types to a JSON format.
         /// </summary>
+        /// <param name="configurationData">The data of <see cref="ConfigurationData"/>.</param>
         /// <returns>[<see cref="Task"/>] An asynchronous operation.</returns>
-        public async Task SerializeAsync()
+        public async Task SerializeAsync(ConfigurationData configurationData)
         {
-            if (!File.Exists(Paths.Configuration))
+            if (!File.Exists(Paths.Configuration) || !File.Exists(Paths.Base))
             {
-                // Try to create the base directory just in case.
                 Directory.CreateDirectory(Paths.Base);
 
-                // Serialize the ConfigData class and inform the user that the config has been created.
-                string serializedData = serializer.Serialize(new
-                {
-                    Data.BotToken,
-                    Data.CommandPrefix,
-                    Data.WaitForLavalinkToOpenInterval,
-                    Data.ActivityType,
-                    Data.Activity,
-                    Data.LavalinkFilePath,
-                    Data.SuccessfulEmbedHexColor,
-                    Data.UnsuccessfulEmbedHexColor,
-                });
-
-                await File.WriteAllTextAsync(Paths.Configuration, serializedData).ConfigureAwait(false);
+                using FileStream serializationStream = File.OpenWrite(Paths.Configuration);
+                await JsonSerializer.SerializeAsync(serializationStream, configurationData, new JsonSerializerOptions { WriteIndented = true });
 
                 await Console.Out.WriteLineAsync($"A new configuration file has been created in: {Paths.Configuration}. Edit the file and re-open this application.").ConfigureAwait(false);
                 await Task.Delay(-1).ConfigureAwait(false);
@@ -49,14 +30,14 @@ namespace Suruga.Handlers.Application
         }
 
         /// <summary>
-        /// Deserializes the configuration data from a YML format to .NET types.
+        /// Deserializes the configuration data from a JSON format to .NET types.
         /// </summary>
         /// <returns>[<see cref="Task"/>] An asynchronous operation.</returns>
         public async Task DeserializeAsync()
         {
             // Deserialize the config file.
             await using FileStream deserializationStream = File.OpenRead(Paths.Configuration);
-            Data = serializer.Deserialize<ConfigurationData>(deserializationStream);
+            CurrentConfigurationDataInstance = await JsonSerializer.DeserializeAsync<ConfigurationData>(deserializationStream);
         }
     }
 

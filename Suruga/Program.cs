@@ -1,7 +1,5 @@
-﻿using System;
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Diagnostics;
-using System.Threading.Tasks;
 using Suruga.Client;
 using Suruga.Handlers.Application;
 using Suruga.Handlers.Lavalink;
@@ -20,11 +18,11 @@ namespace Suruga
             Console.Title = "Suruga";
 
             ConfigurationHandler configHandler = new();
-            await configHandler.SerializeAsync();
+            await configHandler.SerializeAsync(new ConfigurationData());
             await configHandler.DeserializeAsync();
 
             await RunLavalink().ConfigureAwait(false);
-            await Task.Delay(TimeSpan.FromSeconds(int.Parse(ConfigurationHandler.Data.WaitForLavalinkToOpenInterval))).ConfigureAwait(false);
+            await Task.Delay(TimeSpan.FromSeconds(int.Parse(ConfigurationHandler.CurrentConfigurationDataInstance.WaitForLavalinkToOpenInterval))).ConfigureAwait(false);
 
             await new SurugaClient().RunAsync();
         }
@@ -42,8 +40,8 @@ namespace Suruga
                 lavalink.StartInfo.CreateNoWindow = true;
                 lavalink.StartInfo.UseShellExecute = true;
                 lavalink.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
-                lavalink.StartInfo.FileName = "\"" + LavalinkExecutionHandler.SearchForJavaAsync() + "\"";
-                lavalink.StartInfo.Arguments = $"-jar {ConfigurationHandler.Data.LavalinkFilePath}";
+                lavalink.StartInfo.FileName = "\"" + new JDKSearchHandler().SearchForJDK13() + "\"";
+                lavalink.StartInfo.Arguments = $"-jar {ConfigurationHandler.CurrentConfigurationDataInstance.LavalinkFilePath}";
                 lavalink.Start();
 
                 // Tracks the child process. If the parent process exits, the child does as well.

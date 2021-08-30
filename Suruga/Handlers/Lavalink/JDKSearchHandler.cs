@@ -6,24 +6,24 @@ using System.Threading.Tasks;
 
 namespace Suruga.Handlers.Lavalink
 {
-    public static class LavalinkExecutionHandler
+    public class JDKSearchHandler
     {
-        public static string SearchForJavaAsync()
+        public string SearchForJDK13()
         {
-            IEnumerable<string> java = Directory.EnumerateFiles($"C:\\Program Files", "*java.exe", new EnumerationOptions
+            IEnumerable<string> java = Directory.EnumerateFiles("C:\\Program Files", "*java.exe", new EnumerationOptions
             {
                 AttributesToSkip = FileAttributes.Hidden | FileAttributes.Compressed | FileAttributes.System,
                 IgnoreInaccessible = true,
                 RecurseSubdirectories = true,
             });
 
-            if (!java.Where(x => x.Contains("jdk-13")).Any())
+            if (!java.Any(x => x.Contains("jdk-13")))
             {
                 Console.WriteLine("Could not find Java 13. Install it before running this application.");
                 Task.Delay(-1);
             }
 
-            return java.Where(x => x.Contains("jdk-13")).First();
+            return java.First(x => x.Contains("jdk-13"));
         }
     }
 }

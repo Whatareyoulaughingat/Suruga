@@ -6,7 +6,7 @@ using Suruga.Services;
 
 namespace Suruga.Handlers.Discord
 {
-    public static class EmbedHandler
+    public class EmbedHandler
     {
         /// <summary>
         /// Creates an embed that is used as output for <see cref="MusicService"/>.
@@ -20,7 +20,7 @@ namespace Suruga.Handlers.Discord
         {
             DiscordEmbedBuilder embed = new()
             {
-                Color = new DiscordColor(ConfigurationHandler.Data.SuccessfulEmbedHexColor),
+                Color = new DiscordColor(ConfigurationHandler.CurrentConfigurationDataInstance.SuccessfulEmbedHexColor),
                 Description = description,
                 ImageUrl = imageUrl.Value,
                 Timestamp = DateTimeOffset.Now,
@@ -46,7 +46,7 @@ namespace Suruga.Handlers.Discord
         {
             DiscordEmbedBuilder errorEmbed = new()
             {
-                Color = new DiscordColor(ConfigurationHandler.Data.UnsuccessfulEmbedHexColor),
+                Color = new DiscordColor(ConfigurationHandler.CurrentConfigurationDataInstance.UnsuccessfulEmbedHexColor),
                 Description = description,
                 Timestamp = DateTimeOffset.Now,
                 Footer = new DiscordEmbedBuilder.EmbedFooter

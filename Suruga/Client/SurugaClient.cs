@@ -12,7 +12,6 @@ using Lavalink4NET.Tracking;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Suruga.Handlers.Application;
-using Suruga.Handlers.Discord;
 using Suruga.Services;
 
 namespace Suruga.Client
@@ -27,11 +26,11 @@ namespace Suruga.Client
 
         public SurugaClient()
         {
-            // Build the DI.
+            // Setup DI.
             serviceProvider = new ServiceCollection()
                 .AddSingleton(new DiscordShardedClient(new DiscordConfiguration
                 {
-                    Token = ConfigurationHandler.Data.BotToken,
+                    Token = ConfigurationHandler.CurrentConfigurationDataInstance.BotToken,
                     Intents = DiscordIntents.GuildMessages | DiscordIntents.GuildVoiceStates | DiscordIntents.Guilds,
                     LogTimestampFormat = "hh:mm:ss",
                     MinimumLogLevel = LogLevel.Information,
@@ -112,7 +111,7 @@ namespace Suruga.Client
             {
                 await Task.Factory.StartNew(async () =>
                 {
-                    await discordClient.UpdateStatusAsync(new DiscordActivity(ConfigurationHandler.Data.Activity, Enum.Parse<ActivityType>(ConfigurationHandler.Data.ActivityType)));
+                    await discordClient.UpdateStatusAsync(new DiscordActivity(ConfigurationHandler.CurrentConfigurationDataInstance.Activity, Enum.Parse<ActivityType>(ConfigurationHandler.CurrentConfigurationDataInstance.ActivityType)));
                     await audioService.InitializeAsync();
 
                     inactivityTracking.BeginTracking();
@@ -130,7 +129,7 @@ namespace Suruga.Client
         {
             IReadOnlyDictionary<int, CommandsNextExtension> commandsNext = await discordClient.UseCommandsNextAsync(new CommandsNextConfiguration
             {
-                StringPrefixes = new[] { ConfigurationHandler.Data.CommandPrefix },
+                StringPrefixes = new[] { ConfigurationHandler.CurrentConfigurationDataInstance.CommandPrefix },
                 IgnoreExtraArguments = true,
                 Services = serviceProvider,
                 CaseSensitive = true,
