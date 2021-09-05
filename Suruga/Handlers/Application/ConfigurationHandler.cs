@@ -1,75 +1,71 @@
 ﻿using System.Text.Json;
 using Suruga.GlobalData;
 
-namespace Suruga.Handlers.Application
+namespace Suruga.Handlers.Application;
+
+public class ConfigurationHandler
 {
-    public class ConfigurationHandler
+    /// <summary>
+    /// Gets or sets the configuration data of this discord bot such as, its token, command prefix, etc.
+    /// </summary>
+    public static ConfigurationData Data { get; private protected set; }
+
+    /// <summary>
+    /// Serializes .NET types to a JSON format.
+    /// </summary>
+    /// <param name="configurationData">The data of <see cref="ConfigurationData"/>.</param>
+    /// <returns>[<see cref="Task"/>] An asynchronous operation.</returns>
+    public async Task SerializeOnCreationAndDeserializeAsync()
     {
-        /// <summary>
-        /// Gets or sets the configuration data of this discord bot such as, its token, command prefix, etc.
-        /// </summary>
-        public static ConfigurationData CurrentConfigurationDataInstance { get; set; }
-
-        /// <summary>
-        /// Serializes .NET types to a JSON format.
-        /// </summary>
-        /// <param name="configurationData">The data of <see cref="ConfigurationData"/>.</param>
-        /// <returns>[<see cref="Task"/>] An asynchronous operation.</returns>
-        public async Task SerializeAsync(ConfigurationData configurationData)
+        if (!File.Exists(Paths.Configuration))
         {
-            if (!File.Exists(Paths.Configuration) || !File.Exists(Paths.Base))
-            {
-                Directory.CreateDirectory(Paths.Base);
+            Directory.CreateDirectory(Paths.Base);
 
-                using FileStream serializationStream = File.OpenWrite(Paths.Configuration);
-                await JsonSerializer.SerializeAsync(serializationStream, configurationData, new JsonSerializerOptions { WriteIndented = true });
+            string serializedData = JsonSerializer.Serialize(new ConfigurationData(), new JsonSerializerOptions { WriteIndented = true });
+            await File.WriteAllTextAsync(Paths.Configuration, serializedData);
 
-                await Console.Out.WriteLineAsync($"A new configuration file has been created in: {Paths.Configuration}. Edit the file and re-open this application.").ConfigureAwait(false);
-                await Task.Delay(-1).ConfigureAwait(false);
-            }
+            Console.WriteLine($"A new configuration file has been created in: {Paths.Configuration}. Edit the file and re-open this application.");
+            await Task.Delay(-1).ConfigureAwait(false);
         }
 
-        /// <summary>
-        /// Deserializes the configuration data from a JSON format to .NET types.
-        /// </summary>
-        /// <returns>[<see cref="Task"/>] An asynchronous operation.</returns>
-        public async Task DeserializeAsync()
-        {
-            // Deserialize the config file.
-            await using FileStream deserializationStream = File.OpenRead(Paths.Configuration);
-            CurrentConfigurationDataInstance = await JsonSerializer.DeserializeAsync<ConfigurationData>(deserializationStream);
-        }
+        await DeserializeAsync();
     }
 
-    [Serializable]
-    public class ConfigurationData
+    /// <summary>
+    /// Deserializes the configuration data from a JSON format to .NET types.
+    /// </summary>
+    /// <returns>[<see cref="Task"/>] An asynchronous operation.</returns>
+    private async Task DeserializeAsync()
     {
-        public ConfigurationData()
-        {
-            BotToken = "Insert a token for the bot to work.";
-            CommandPrefix = "?";
-            WaitForLavalinkToOpenInterval = "5";
-            ActivityType = DSharpPlus.Entities.ActivityType.Playing.ToString();
-            Activity = "A description of the bot's activity.";
-            LavalinkFilePath = $"{Directory.GetCurrentDirectory()}\\Lavalink.jar";
-            SuccessfulEmbedHexColor = "#007fff";
-            UnsuccessfulEmbedHexColor = "#ff0000";
-        }
-
-        public string BotToken { get; set; }
-
-        public string CommandPrefix { get; set; }
-
-        public string WaitForLavalinkToOpenInterval { get; set; }
-
-        public string ActivityType { get; set; }
-
-        public string Activity { get; set; }
-
-        public string LavalinkFilePath { get; set; }
-
-        public string SuccessfulEmbedHexColor { get; set; }
-
-        public string UnsuccessfulEmbedHexColor { get; set; }
+        await using FileStream deserializationStream = File.OpenRead(Paths.Configuration);
+        Data = await JsonSerializer.DeserializeAsync<ConfigurationData>(deserializationStream);
     }
+}
+
+public record ConfigurationData
+{
+    public ConfigurationData()
+    {
+        Token = string.Empty;
+        CommandPrefix = string.Empty;
+        ActivityType = string.Empty;
+        Activity = string.Empty;
+        SuccessfulEmbedHexColor = "#007fff";
+        UnsuccessfulEmbedHexColor = "#ff0000";
+        VoiceChannelDisconnectDelay = "5";
+    }
+
+    public string Token { get; init; }
+
+    public string CommandPrefix { get; init; }
+
+    public string ActivityType { get; init; }
+
+    public string Activity { get; init; }
+
+    public string SuccessfulEmbedHexColor { get; init; }
+
+    public string UnsuccessfulEmbedHexColor { get; init; }
+
+    public string VoiceChannelDisconnectDelay { get; init; }
 }
