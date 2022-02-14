@@ -1,48 +1,78 @@
-﻿using System.Reflection;
+﻿using System;
+using System.Threading.Tasks;
 using DSharpPlus;
 using DSharpPlus.CommandsNext;
 using DSharpPlus.Entities;
 using Lavalink4NET;
+using Lavalink4NET.Cluster;
+using Lavalink4NET.DSharpPlus;
 using Lavalink4NET.Tracking;
 using Microsoft.Extensions.DependencyInjection;
-using Suruga.Handlers.Application;
-using Suruga.Injectors;
+using Suruga.Handlers;
+using Suruga.Modules;
+using Suruga.Services;
 
 namespace Suruga.Client;
 
 public class SurugaClient
 {
-    private readonly DiscordShardedClient discordClient;
+    public static ServiceProvider Services { get; private set; }
+
+    private readonly DiscordClient discordClient;
     private readonly InactivityTrackingService inactivityTracking;
     private readonly IAudioService audioService;
 
     public SurugaClient()
     {
-        DependencyInjector.Inject();
+        // Setup DI.
+        Services = new ServiceCollection()
+            // DSharpPlus singletons.
+            .AddSingleton(new DiscordShardedClient(new DiscordConfiguration
+            {
+                Token = ConfigurationHandler.Data.Token,
+                Intents = DiscordIntents.GuildMessages | DiscordIntents.GuildVoiceStates | DiscordIntents.Guilds,
+                LogTimestampFormat = "hh:mm:ss",
+            }))
+
+            // Lavalink4NET singletons.
+            .AddSingleton<IAudioService, LavalinkNode>()
+            .AddSingleton<IDiscordClientWrapper, DiscordClientWrapper>()
+            .AddSingleton(new LavalinkNodeOptions
+            {
+                AllowResuming = true,
+                Decompression = true,
+                DisconnectOnStop = false,
+                Password = "youshallnotpass",
+                RestUri = "http://localhost:2333",
+                WebSocketUri = "ws://localhost:2333",
+            })
+            .AddSingleton<InactivityTrackingService>()
+            .AddSingleton(new InactivityTrackingOptions
+            {
+                DisconnectDelay = TimeSpan.FromMinutes(Convert.ToDouble(ConfigurationHandler.Data.DisconnectFromVCAfterMinutes)),
+                PollInterval = TimeSpan.FromSeconds(30.0),
+                TrackInactivity = true,
+            })
+
+            // Modules (commands) singletons.
+            .AddSingleton<MusicService>()
+            .BuildServiceProvider();
 
         // Get required services from DI.
-        discordClient = DependencyInjector.Services.GetRequiredService<DiscordShardedClient>();
-        inactivityTracking = DependencyInjector.Services.GetRequiredService<InactivityTrackingService>();
-        audioService = DependencyInjector.Services.GetRequiredService<IAudioService>();
+        discordClient = Services.GetRequiredService<DiscordClient>();
+        inactivityTracking = Services.GetRequiredService<InactivityTrackingService>();
+        audioService = Services.GetRequiredService<IAudioService>();
     }
 
-    /// <summary>
-    /// Starts asynchronously this bot.
-    /// </summary>
-    /// <returns>[<see cref="Task"/>] An asynchronous operation.</returns>
     public async Task RunAsync()
     {
-        await InitializeCommandHandlerAsync().ConfigureAwait(false);
+        InitializeCommandHandler();
         InitializeEvents();
 
-        await discordClient.StartAsync();
+        await discordClient.ConnectAsync();
         await Task.Delay(-1).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Initializes the bot's events.
-    /// </summary>
-    /// <returns>[<see cref="Task"/>] An asynchronous operation.</returns>
     private void InitializeEvents()
     {
         discordClient.Ready += async (client, readyEventArgs) =>
@@ -57,22 +87,15 @@ public class SurugaClient
         };
     }
 
-    /// <summary>
-    /// Initializes the command handler.
-    /// </summary>
-    /// <returns>[<see cref="Task"/>] An asynchronous operation.</returns>
-    private async Task InitializeCommandHandlerAsync()
+    private void InitializeCommandHandler()
     {
-        IReadOnlyDictionary<int, CommandsNextExtension> commandsNext = await discordClient.UseCommandsNextAsync(new CommandsNextConfiguration
+        CommandsNextExtension commandsNext = discordClient.UseCommandsNext(new CommandsNextConfiguration
         {
-            StringPrefixes = ConfigurationHandler.Data.CommandPrefixes.Values,
+            StringPrefixes = ConfigurationHandler.Data.CommandPrefixes,
             IgnoreExtraArguments = true,
-            Services = DependencyInjector.Services,
+            Services = Services,
         });
 
-        foreach (CommandsNextExtension commands in commandsNext.Values)
-        {
-            commands.RegisterCommands(Assembly.GetExecutingAssembly());
-        }
+        commandsNext.RegisterCommands<Music>();
     }
 }

@@ -1,14 +1,18 @@
 ﻿using Suruga.GlobalData;
+using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Text.Json;
+using System.Threading.Tasks;
 
-namespace Suruga.Handlers.Application;
+namespace Suruga.Handlers;
 
 public class ConfigurationHandler
 {
     /// <summary>
     /// Gets or sets the configuration data of this discord bot such as, its token, command prefix, etc.
     /// </summary>
-    public static ConfigurationData Data { get; private protected set; }
+    public static ConfigurationData Data { get; private set; }
 
     /// <summary>
     /// Serializes .NET types to a JSON format.
@@ -47,28 +51,25 @@ public record ConfigurationData
     public ConfigurationData()
     {
         Token = string.Empty;
-        CommandPrefixes = new();
         ActivityType = string.Empty;
         Activity = string.Empty;
-        SuccessfulCommandResultInEmbedHexColor = "#007fff";
-        UnsuccessfulCommandResultInEmbedHexColor = "#ff0000";
-        DisconnectInVoiceChannelAfterInMinutes = "5";
+        CommandPrefixes = new() { "!" };
+        EmbedHexColorAfterSucessfullCommand = "#007fff";
+        EmbedHexColorAfterFailedCommand = "#ff0000";
+        DisconnectFromVCAfterMinutes = "5";
     }
 
     public string Token { get; init; }
-
-    /// <summary>
-    /// TKey is the guild and TValue is the command prefix.
-    /// </summary>
-    public Dictionary<ulong, string> CommandPrefixes { get; init; }
 
     public string ActivityType { get; init; }
 
     public string Activity { get; init; }
 
-    public string SuccessfulCommandResultInEmbedHexColor { get; init; }
+    public List<string> CommandPrefixes { get; init; }
 
-    public string UnsuccessfulCommandResultInEmbedHexColor { get; init; }
+    public string EmbedHexColorAfterSucessfullCommand { get; init; }
 
-    public string DisconnectInVoiceChannelAfterInMinutes { get; init; }
+    public string EmbedHexColorAfterFailedCommand { get; init; }
+
+    public string DisconnectFromVCAfterMinutes { get; init; }
 }

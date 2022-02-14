@@ -7,6 +7,8 @@ using Lavalink4NET.Player;
 using Lavalink4NET.Rest;
 using Lavalink4NET.Lyrics;
 using Suruga.Injectors;
+using System.Threading.Tasks;
+using System.Linq;
 
 namespace Suruga.Services;
 

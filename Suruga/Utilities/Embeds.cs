@@ -1,5 +1,7 @@
 ﻿using DSharpPlus.Entities;
-using Suruga.Handlers.Application;
+using Suruga.Handlers;
+using System;
+using System.Threading.Tasks;
 
 namespace Suruga.Injectors;
 
@@ -17,7 +19,7 @@ public static class Embeds
     {
         DiscordEmbedBuilder embed = new()
         {
-            Color = new DiscordColor(ConfigurationHandler.Data.SuccessfulCommandResultInEmbedHexColor),
+            Color = new DiscordColor(ConfigurationHandler.Data.EmbedHexColorAfterSucessfullCommand),
             Description = description,
             ImageUrl = imageUrl,
             Timestamp = DateTimeOffset.Now,
@@ -43,7 +45,7 @@ public static class Embeds
     {
         DiscordEmbedBuilder errorEmbed = new()
         {
-            Color = new DiscordColor(ConfigurationHandler.Data.UnsuccessfulCommandResultInEmbedHexColor),
+            Color = new DiscordColor(ConfigurationHandler.Data.EmbedHexColorAfterFailedCommand),
             Description = description,
             Timestamp = DateTimeOffset.Now,
             Footer = new DiscordEmbedBuilder.EmbedFooter

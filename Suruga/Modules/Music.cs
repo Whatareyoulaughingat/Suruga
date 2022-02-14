@@ -3,6 +3,7 @@ using DSharpPlus.CommandsNext;
 using DSharpPlus.CommandsNext.Attributes;
 using Lavalink4NET;
 using Suruga.Services;
+using System.Threading.Tasks;
 
 namespace Suruga.Modules;
 
@@ -75,4 +76,39 @@ public class Music : BaseCommandModule
     [RequireUserPermissions(Permissions.AccessChannels | Permissions.SendMessages | Permissions.UseVoice)]
     public async Task ListQueueCommand(CommandContext commandContext)
         => await musicService.ListQueueAsync(commandContext.Channel, commandContext.Member, commandContext.Services.GetService(typeof(IAudioService)) as IAudioService);
+
+    [Command("replay")]
+    [Description("Replays the current track.")]
+    [RequireBotPermissions(Permissions.AccessChannels | Permissions.EmbedLinks | Permissions.Speak | Permissions.UseVoice)]
+    [RequireUserPermissions(Permissions.AccessChannels | Permissions.SendMessages | Permissions.UseVoice)]
+    public async Task ReplayCommand(CommandContext commandContext)
+        => await musicService.ReplayAsync(commandContext.Channel, commandContext.Member, commandContext.Services.GetService(typeof(IAudioService)) as IAudioService);
+
+    [Command("loop")]
+    [Description("Loops or unloops the current track.")]
+    [RequireBotPermissions(Permissions.AccessChannels | Permissions.EmbedLinks | Permissions.Speak | Permissions.UseVoice)]
+    [RequireUserPermissions(Permissions.AccessChannels | Permissions.SendMessages | Permissions.UseVoice)]
+    public async Task LoopCommand(CommandContext commandContext)
+        => await musicService.LoopAsync(commandContext.Channel, commandContext.Member, commandContext.Services.GetService(typeof(IAudioService)) as IAudioService);
+
+    [Command("nowplaying")]
+    [Description("Lists some info about the current playing track.")]
+    [RequireBotPermissions(Permissions.AccessChannels | Permissions.EmbedLinks | Permissions.Speak | Permissions.UseVoice)]
+    [RequireUserPermissions(Permissions.AccessChannels | Permissions.SendMessages | Permissions.UseVoice)]
+    public async Task NowPlayingCommand(CommandContext commandContext)
+        => await musicService.NowPlayingAsync(commandContext.Channel, commandContext.Member, commandContext.Services.GetService(typeof(IAudioService)) as IAudioService);
+
+    [Command("clearqueue")]
+    [Description("Clears the current queue.")]
+    [RequireBotPermissions(Permissions.AccessChannels | Permissions.EmbedLinks | Permissions.Speak | Permissions.UseVoice)]
+    [RequireUserPermissions(Permissions.AccessChannels | Permissions.SendMessages | Permissions.UseVoice)]
+    public async Task ClearQueueCommand(CommandContext commandContext)
+        => await musicService.ClearQueueAsync(commandContext.Channel, commandContext.Member, commandContext.Services.GetService(typeof(IAudioService)) as IAudioService);
+
+    [Command("lyrics")]
+    [Description("Posts the lyrics of the current track if they exist.")]
+    [RequireBotPermissions(Permissions.AccessChannels | Permissions.EmbedLinks | Permissions.Speak | Permissions.UseVoice)]
+    [RequireUserPermissions(Permissions.AccessChannels | Permissions.SendMessages | Permissions.UseVoice)]
+    public async Task LyricsCommand(CommandContext commandContext)
+        => await musicService.PostLyricsAsync(commandContext.Channel, commandContext.Member, commandContext.Services.GetService(typeof(IAudioService)) as IAudioService);
 }
