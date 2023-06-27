@@ -1,34 +1,108 @@
-﻿using System;
-using System.Threading.Tasks;
-using Serilog;
-using Serilog.Sinks.SystemConsole.Themes;
+﻿using Discord;
+using Discord.Commands;
+using Discord.Interactions;
+using Discord.WebSocket;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Console;
 using Suruga.Client;
-using Suruga.GlobalData;
+using Suruga.Global;
 using Suruga.Handlers;
+using Suruga.Logging;
+using Suruga.Services;
+using System;
+using System.IO;
+using Victoria;
+using HostProvider = Microsoft.Extensions.Hosting.Host;
 
 namespace Suruga;
 
-public class Program
+internal sealed class Program
 {
-    /// <summary>
-    /// The main method where execution of this bot starts.
-    /// </summary>
-    /// <returns>[<see cref="Task"/>] An asynchronous operation.</returns>
-    private static async Task Main()
+    internal static IHost Host { get; private set; }
+
+    private static void Main()
     {
-        Console.Title = "Suruga v2";
+        Console.Title = "Suruga";
 
-        Log.Logger = new LoggerConfiguration()
+        Host = HostProvider
+            .CreateDefaultBuilder()
+            .ConfigureAppConfiguration(config =>
+            {
+                Directory.CreateDirectory(Paths.BinariesDirectory);
+                Directory.CreateDirectory(Paths.LogsDirectory);
+
+                if (!File.Exists(Paths.ConfigurationFile))
+                {
+                    File.WriteAllText(Paths.ConfigurationFile,
+                        """
+                        Token=
+                        CommandPrefix=?
+                        Status=Online
+                        ActivityName=
+                        ActivityDescription=
+                        ActivityStatus=
+                        HexColorOnSuccessfulCommand=
+                        HexColorOnUnssuccessfulCommand=
+                        LavalinkHostname=localhost
+                        LavalinkPort=2333
+                        DeafenOnVoiceChannel=True
+                        """);
+
+                    Console.WriteLine($"A configuration file has been generated in {Paths.ConfigurationFile}. Fill in every value and run the bot again.");
+                    Environment.Exit(0);
+                }
+
+                config.AddIniFile(Paths.ConfigurationFile, optional: false, reloadOnChange: false);
+            })
+            .ConfigureServices((ctx, services) =>
+            {
+                services
+                .AddSingleton(ctx.Configuration)
+                .AddSingleton<ConsoleFormatter, SimpleColoredConsoleFormatter>()
+                .AddLogging(builder =>
+                {
 #if DEBUG
-            .MinimumLevel.Debug()
+                    builder.SetMinimumLevel(LogLevel.Debug);
 #else
-            .MinimumLevel.Information()
+                    builder.SetMinimumLevel(LogLevel.Information);
 #endif
-            .WriteTo.Console(theme: SystemConsoleTheme.Literate)
-            .WriteTo.File(Paths.Log, shared: true, rollingInterval: RollingInterval.Day)
-            .CreateLogger();
+                    builder.AddConsole(x => x.FormatterName = "simple-colored-console");
+                })
+                .AddSingleton<ProgramLogger>()
+                .AddSingleton<ClientLogger>()
+                .AddSingleton<CommandHandler>()
+                .AddSingleton<InteractionHandler>()
+                .AddSingleton(new DiscordSocketClient(new DiscordSocketConfig
+                {
+                    GatewayIntents = GatewayIntents.GuildVoiceStates | GatewayIntents.MessageContent | GatewayIntents.GuildMessages,
+                    LogLevel = LogSeverity.Debug,
+                }))
+                .AddSingleton(new CommandService(new CommandServiceConfig
+                {
+                    LogLevel = LogSeverity.Debug,
+                    DefaultRunMode = Discord.Commands.RunMode.Async,
+                    CaseSensitiveCommands = false,
+                }))
+                .AddSingleton((services) =>
+                {
+                    DiscordSocketClient client = services.GetRequiredService<DiscordSocketClient>();
+                    return new InteractionService(client, new InteractionServiceConfig
+                    {
+                        DefaultRunMode = Discord.Interactions.RunMode.Async,
+                        LogLevel = LogSeverity.Debug,
+                        UseCompiledLambda = true,
+                    });
+                })
+                .AddSingleton<MusicService>()
+                .AddLavaNode();
+            })
+            .UseConsoleLifetime()
+            .Build();
 
-        await new ConfigurationHandler().SerializeOnCreationAndDeserializeAsync();
-        await new SurugaClient().RunAsync();
+        Host.Start();
+        new SurugaClient().RunAsync().GetAwaiter().GetResult();
     }
 }

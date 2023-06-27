@@ -1,101 +1,82 @@
-﻿using System;
-using System.Threading.Tasks;
-using DSharpPlus;
-using DSharpPlus.CommandsNext;
-using DSharpPlus.Entities;
-using Lavalink4NET;
-using Lavalink4NET.Cluster;
-using Lavalink4NET.DSharpPlus;
-using Lavalink4NET.Tracking;
+﻿using Discord;
+using Discord.WebSocket;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Suruga.Handlers;
-using Suruga.Modules;
-using Suruga.Services;
+using Suruga.Logging;
+using System;
+using System.Threading.Tasks;
+using Victoria.Node;
 
 namespace Suruga.Client;
 
-public class SurugaClient
+internal sealed class SurugaClient
 {
-    public static ServiceProvider Services { get; private set; }
+    private IConfiguration _configuration;
 
-    private readonly DiscordClient discordClient;
-    private readonly InactivityTrackingService inactivityTracking;
-    private readonly IAudioService audioService;
+    private ProgramLogger _programLogger;
 
-    public SurugaClient()
+    private ClientLogger _clientLogger;
+
+    private DiscordSocketClient _client;
+
+    private CommandHandler _commandHandler;
+
+    private InteractionHandler _interactionHandler;
+
+    private LavaNode _lavaNode;
+
+    internal async Task RunAsync()
     {
-        // Setup DI.
-        Services = new ServiceCollection()
-            // DSharpPlus singletons.
-            .AddSingleton(new DiscordShardedClient(new DiscordConfiguration
-            {
-                Token = ConfigurationHandler.Data.Token,
-                Intents = DiscordIntents.GuildMessages | DiscordIntents.GuildVoiceStates | DiscordIntents.Guilds,
-                LogTimestampFormat = "hh:mm:ss",
-            }))
+        _configuration = Program.Host.Services.GetRequiredService<IConfiguration>();
+        _programLogger = Program.Host.Services.GetRequiredService<ProgramLogger>();
+        _clientLogger = Program.Host.Services.GetRequiredService<ClientLogger>();
+        _client = Program.Host.Services.GetRequiredService<DiscordSocketClient>();
+        _commandHandler = Program.Host.Services.GetRequiredService<CommandHandler>();
+        _interactionHandler = Program.Host.Services.GetRequiredService<InteractionHandler>();
+        _lavaNode = Program.Host.Services.GetRequiredService<LavaNode>();
 
-            // Lavalink4NET singletons.
-            .AddSingleton<IAudioService, LavalinkNode>()
-            .AddSingleton<IDiscordClientWrapper, DiscordClientWrapper>()
-            .AddSingleton(new LavalinkNodeOptions
-            {
-                AllowResuming = true,
-                Decompression = true,
-                DisconnectOnStop = false,
-                Password = "youshallnotpass",
-                RestUri = "http://localhost:2333",
-                WebSocketUri = "ws://localhost:2333",
-            })
-            .AddSingleton<InactivityTrackingService>()
-            .AddSingleton(new InactivityTrackingOptions
-            {
-                DisconnectDelay = TimeSpan.FromMinutes(Convert.ToDouble(ConfigurationHandler.Data.DisconnectFromVCAfterMinutes)),
-                PollInterval = TimeSpan.FromSeconds(30.0),
-                TrackInactivity = true,
-            })
+        _client.Log += OnLog;
+        _client.Ready += OnReadyAsync;
 
-            // Modules (commands) singletons.
-            .AddSingleton<MusicService>()
-            .BuildServiceProvider();
-
-        // Get required services from DI.
-        discordClient = Services.GetRequiredService<DiscordClient>();
-        inactivityTracking = Services.GetRequiredService<InactivityTrackingService>();
-        audioService = Services.GetRequiredService<IAudioService>();
-    }
-
-    public async Task RunAsync()
-    {
-        InitializeCommandHandler();
-        InitializeEvents();
-
-        await discordClient.ConnectAsync();
-        await Task.Delay(-1).ConfigureAwait(false);
-    }
-
-    private void InitializeEvents()
-    {
-        discordClient.Ready += async (client, readyEventArgs) =>
+        try
         {
-            await Task.Factory.StartNew(async () =>
-            {
-                await discordClient.UpdateStatusAsync(new DiscordActivity(ConfigurationHandler.Data.Activity, Enum.Parse<ActivityType>(ConfigurationHandler.Data.ActivityType)));
-                await audioService.InitializeAsync();
+            await _client.LoginAsync(TokenType.Bot, _configuration["Token"]);
+            await _client.StartAsync();
+        }
+        catch (Exception ex)
+        {
+            _programLogger.LogCritical("Failed to start.", ex);
+        }
 
-                inactivityTracking.BeginTracking();
-            });
-        };
+        await Task.Delay(-1);
     }
 
-    private void InitializeCommandHandler()
+    private async Task OnReadyAsync()
     {
-        CommandsNextExtension commandsNext = discordClient.UseCommandsNext(new CommandsNextConfiguration
-        {
-            StringPrefixes = ConfigurationHandler.Data.CommandPrefixes,
-            IgnoreExtraArguments = true,
-            Services = Services,
-        });
+        await _commandHandler.InitializeAsync();
+        await _interactionHandler.InitializeAsync();
 
-        commandsNext.RegisterCommands<Music>();
+        if (Enum.TryParse(_configuration["Status"], out UserStatus status))
+        {
+            await _client.SetStatusAsync(status);
+        }
+
+        if (Enum.TryParse(_configuration["ActivityType"], out ActivityType activity))
+        {
+            await _client.SetActivityAsync(new Game(
+                name: _configuration["ActivityName"],
+                type: activity,
+                flags: ActivityProperties.None,
+                details: _configuration["ActivityDescription"]));
+        }
+
+        await _lavaNode.ConnectAsync();
+    }
+
+    private Task OnLog(LogMessage message)
+    {
+        _clientLogger.Log(_clientLogger.ToLogLevel(message.Severity), message.Message, message.Exception);
+        return Task.CompletedTask;
     }
 }

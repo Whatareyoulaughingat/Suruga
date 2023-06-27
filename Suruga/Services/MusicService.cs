@@ -1,342 +1,855 @@
-﻿using System.Text;
-using DSharpPlus;
-using DSharpPlus.Entities;
-using Lavalink4NET;
-using Lavalink4NET.Events;
-using Lavalink4NET.Player;
-using Lavalink4NET.Rest;
-using Lavalink4NET.Lyrics;
-using Suruga.Injectors;
-using System.Threading.Tasks;
+﻿using Discord;
+using Discord.WebSocket;
+using Microsoft.Extensions.Configuration;
+using Suruga.Helpers;
+using Suruga.Logging;
+using System;
+using System.Collections.Concurrent;
 using System.Linq;
+using System.Reactive.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using Victoria;
+using Victoria.Node;
+using Victoria.Node.EventArgs;
+using Victoria.Player;
+using Victoria.Player.Filters;
+using Victoria.Responses.Search;
+using EmbedType = Suruga.Helpers.EmbedType;
 
 namespace Suruga.Services;
 
-public class MusicService
+public sealed class MusicService
 {
-    public async Task<DiscordMessage> PlayAsync(DiscordClient client, DiscordChannel channel, DiscordMember member, IAudioService audioService, string url)
+    private ConcurrentBag<IDisposable> _disposableEvents;
+
+    private readonly IConfiguration _configuration;
+
+    private readonly LavaNode _lavaNode;
+
+    private readonly ProgramLogger _programLogger;
+
+    public MusicService(IConfiguration configuration, LavaNode lavaNode, ProgramLogger programLogger)
     {
-        if (member.VoiceState == null || member.VoiceState.Channel == null)
-        {
-            return await Embeds.CreateErrorEmbed(channel, member, "Join a voice channel first.");
-        }
-
-        if (string.IsNullOrWhiteSpace(url))
-        {
-            return await Embeds.CreateErrorEmbed(channel, member, "Specify a valid URL.");
-        }
-
-        QueuedLavalinkPlayer player = audioService.GetPlayer<QueuedLavalinkPlayer>(member.Guild.Id)
-            ?? await audioService.JoinAsync<QueuedLavalinkPlayer>(member.Guild.Id, member.VoiceState.Channel.Id, true);
-
-        audioService.TrackEnd += async (sender, trackEndEventArgs) => await OnTrackEndAsync(trackEndEventArgs, channel, member).ConfigureAwait(false);
-        audioService.TrackStuck += async (sender, trackStuckEventArgs) => await OnTrackStuckAsync(trackStuckEventArgs, channel, member).ConfigureAwait(false);
-
-        TrackLoadResponsePayload trackLoadResponse = await audioService.LoadTracksAsync(url, SearchMode.YouTube);
-        if (trackLoadResponse.LoadType == TrackLoadType.LoadFailed || trackLoadResponse.LoadType == TrackLoadType.NoMatches)
-        {
-            return await Embeds.CreateErrorEmbed(channel, member, "Failed to load the specified track or there were no matches of it.");
-        }
-
-        LavalinkTrack track = trackLoadResponse.Tracks.First();
-
-        if ((player.CurrentTrack != null && player.State == PlayerState.Playing) || player.State == PlayerState.Paused)
-        {
-            player.Queue.Add(track);
-            return await Embeds.CreateEmbed(channel, member, $"{track.Title} has been added to the queue.");
-        }
-
-        client.Resumed += async (client, readyEventArgs) => await player.ResumeAsync();
-
-        await player.PlayAsync(track);
-        return await Embeds.CreateEmbed(channel, member, $"Now Playing [{track.Title}]({track.Source})");
+        _configuration = configuration;
+        _lavaNode = lavaNode;
+        _programLogger = programLogger;
     }
 
-    public async Task<DiscordMessage> LeaveAsync(DiscordChannel channel, DiscordMember member, IAudioService audioService)
+    internal async Task LeaveAsync(IGuildUser user, ISocketMessageChannel channel)
     {
-        if (member.VoiceState == null || member.VoiceState.Channel == null)
+        if (user?.VoiceChannel is null)
         {
-            return await Embeds.CreateErrorEmbed(channel, member, "You must first join a voice channel.");
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "You must join a voice channel first!");
+            return;
         }
 
-        QueuedLavalinkPlayer player = audioService.GetPlayer<QueuedLavalinkPlayer>(member.Guild.Id);
-
-        await player.DisconnectAsync();
-        return await Embeds.CreateEmbed(channel, member, $"Left **{member.VoiceState.Channel.Name}**");
-    }
-
-    public async Task<DiscordMessage> StopAsync(DiscordChannel channel, DiscordMember member, IAudioService audioService)
-    {
-        if (member.VoiceState == null || member.VoiceState.Channel == null)
+        if (!_lavaNode.TryGetPlayer(user.Guild, out LavaPlayer<LavaTrack> player))
         {
-            return await Embeds.CreateErrorEmbed(channel, member, "You must first join a voice channel.");
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "I'm not in a voice channel!");
+            return;
         }
 
-        QueuedLavalinkPlayer player = audioService.GetPlayer<QueuedLavalinkPlayer>(member.Guild.Id);
-
-        if (player.State == PlayerState.NotPlaying)
+        if (player is null)
         {
-            return await Embeds.CreateErrorEmbed(channel, member, "There isn't anything to stop.");
+            return;
         }
 
-        await player.StopAsync();
-        return await Embeds.CreateEmbed(channel, member, "Stopped the playback.");
-    }
+        await EmbedHelper.Create(user, channel, EmbedType.Successful, $"Left {player.VoiceChannel.Name}");
 
-    public async Task<DiscordMessage> PauseAsync(DiscordChannel channel, DiscordMember member, IAudioService audioService)
-    {
-        if (member.VoiceState == null)
+        try
         {
-            return await Embeds.CreateErrorEmbed(channel, member, "You must first join a voice channel.");
-        }
-
-        QueuedLavalinkPlayer player = audioService.GetPlayer<QueuedLavalinkPlayer>(member.Guild.Id);
-
-        if (player.CurrentTrack == null || player.State == PlayerState.Paused)
-        {
-            return await Embeds.CreateErrorEmbed(channel, member, "There isn't anything to pause.");
-        }
-
-        await player.PauseAsync();
-        return await Embeds.CreateEmbed(channel, member, $"Paused [{player.CurrentTrack.Title}]({player.CurrentTrack.Source})");
-    }
-
-    public async Task<DiscordMessage> ResumeAsync(DiscordChannel channel, DiscordMember member, IAudioService audioService)
-    {
-        if (member.VoiceState == null || member.VoiceState.Channel == null)
-        {
-            return await Embeds.CreateErrorEmbed(channel, member, "You must first join a voice channel.");
-        }
-
-        QueuedLavalinkPlayer player = audioService.GetPlayer<QueuedLavalinkPlayer>(member.Guild.Id);
-
-        if (player.CurrentTrack == null || player.State == PlayerState.Playing)
-        {
-            return await Embeds.CreateErrorEmbed(channel, member, "There is nothing to resume.");
-        }
-
-        await player.ResumeAsync();
-        return await Embeds.CreateEmbed(channel, member, $"Resumed [{player.CurrentTrack.Title}]({player.CurrentTrack.Source})");
-    }
-
-    public async Task<DiscordMessage> UpdateVolumeAsync(DiscordChannel channel, DiscordMember member, IAudioService audioService, float volume)
-    {
-        if (member.VoiceState == null || member.VoiceState.Channel == null)
-        {
-            return await Embeds.CreateErrorEmbed(channel, member, "You must first join a voice channel.");
-        }
-
-        if (volume > 10f || volume < 0f)
-        {
-            return await Embeds.CreateErrorEmbed(channel, member, "The volume must be in a range between 0 and 10.");
-        }
-
-        QueuedLavalinkPlayer player = audioService.GetPlayer<QueuedLavalinkPlayer>(member.Guild.Id);
-
-        await player.SetVolumeAsync(volume, force: true);
-        return await Embeds.CreateEmbed(channel, member, $"Updated volume to {volume}");
-    }
-
-    public async Task<DiscordMessage> SkipAsync(DiscordChannel channel, DiscordMember member, IAudioService audioService, int skipCount = 1)
-    {
-        if (member.VoiceState == null || member.VoiceState.Channel == null)
-        {
-            await Embeds.CreateErrorEmbed(channel, member, "You must first join a voice channel.");
-            return null;
-        }
-
-        QueuedLavalinkPlayer player = audioService.GetPlayer<QueuedLavalinkPlayer>(member.Guild.Id);
-
-        if (!player.Queue.TryDequeue(out LavalinkTrack queueableLavalinkTrack))
-        {
-            return await Embeds.CreateErrorEmbed(channel, member, "There isn't any track in the queue in order to skip the current one.");
-        }
-
-        if (queueableLavalinkTrack is null)
-        {
-            return await Embeds.CreateErrorEmbed(channel, member, $"The specific track is invalid.");
-        }
-
-        if (skipCount > player.Queue.Count)
-        {
-            return await Embeds.CreateErrorEmbed(channel, member, "The number of tracks to skip is bigger than the actual queue.");
-        }
-
-        await player.SkipAsync(skipCount);
-        await player.PlayAsync(queueableLavalinkTrack);
-        return await Embeds.CreateEmbed(channel, member, "Skipped the track.");
-    }
-
-    public async Task<DiscordMessage> ShuffleAsync(DiscordChannel channel, DiscordMember member, IAudioService audioService)
-    {
-        if (member.VoiceState == null || member.VoiceState.Channel == null)
-        {
-            return await Embeds.CreateErrorEmbed(channel, member, "You must first join a voice channel.");
-        }
-
-        QueuedLavalinkPlayer player = audioService.GetPlayer<QueuedLavalinkPlayer>(member.Guild.Id);
-
-        if (player.Queue.IsEmpty || player.Queue.Count <= 1)
-        {
-            return await Embeds.CreateErrorEmbed(channel, member, "The queue isn't big enough to shuffle. Have at least 2 tracks in the queue.");
-        }
-
-        player.Queue.Shuffle();
-        return await Embeds.CreateEmbed(channel, member, "Shuffled the queue.");
-    }
-
-    public async Task<DiscordMessage> ListQueueAsync(DiscordChannel channel, DiscordMember member, IAudioService audioService)
-    {
-        if (member.VoiceState == null || member.VoiceState.Channel == null)
-        {
-            return await Embeds.CreateErrorEmbed(channel, member, "You must first join a voice channel.");
-        }
-
-        QueuedLavalinkPlayer player = audioService.GetPlayer<QueuedLavalinkPlayer>(member.Guild.Id);
-
-        if (!player.Queue.Any() && player.CurrentTrack != null)
-        {
-            return await Embeds.CreateEmbed(channel, member, $"Currently Playing: [{player.CurrentTrack.Title}]({player.CurrentTrack.Source}).\nNothing else is queued.");
-        }
-        else
-        {
-            /*
-            Now we know if we have something in the queue worth replying with, so we iterate through all the Tracks in the queue.
-            Next Add the Track title and the url however make use of Discords Markdown feature to display everything neatly.
-            This trackNum variable is used to display the number in which the song is in place. (Start at 2 because we're including the current song).
-            */
-
-            int trackNum = 2;
-
-            StringBuilder builderDescription = new();
-            foreach (LavalinkTrack track in player.Queue)
+            foreach (IDisposable registeredEvent in _disposableEvents)
             {
-                builderDescription.Append($"\n{trackNum}: **{track.Title}**.\n");
-                trackNum++;
-
-                await Task.CompletedTask.ConfigureAwait(false);
+                registeredEvent?.Dispose();
             }
 
-            return await Embeds.CreateEmbed(channel, member, $"Currently playing: [{player.CurrentTrack.Title}]({player.CurrentTrack.Source}).\n{builderDescription}");
+            await player.DisposeAsync();
+        }
+        catch (Exception ex)
+        {
+            _programLogger.LogError("Failed to dispose a player and its events.", ex);
         }
     }
 
-    public async Task<DiscordMessage> ReplayAsync(DiscordChannel channel, DiscordMember member, IAudioService audioService)
+    internal async Task PlayAsync(IGuildUser user, ISocketMessageChannel channel, string query, IVoiceChannel voiceChannel = null)
     {
-        if (member.VoiceState == null || member.VoiceState.Channel == null)
+        if (user?.VoiceChannel is null)
         {
-            return await Embeds.CreateErrorEmbed(channel, member, "You must first join a voice channel.");
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "You must join a voice channel first!");
+            return;
         }
 
-        QueuedLavalinkPlayer player = audioService.GetPlayer<QueuedLavalinkPlayer>(member.Guild.Id);
-        await player.ReplayAsync();
+        if (!string.IsNullOrWhiteSpace(query))
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "Provide a URL");
+            return;
+        }
 
-        return await Embeds.CreateEmbed(channel, member, $"Replaying: [{player.CurrentTrack.Title}]({player.CurrentTrack.Source}).");
+        if (!Uri.IsWellFormedUriString(query, UriKind.Absolute))
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "The URL your provided is not valid.");
+            return;
+        }
+
+        if (!_lavaNode.HasPlayer(user.Guild))
+        {
+            IDisposable trackEndEvent = Observable.FromEventPattern<TrackEndEventArg<LavaPlayer<LavaTrack>, LavaTrack>>(
+                handler => _lavaNode.OnTrackEnd += (args) => OnTrackEndedAsync(user, channel, args),
+                handler => _lavaNode.OnTrackEnd -= (args) => OnTrackEndedAsync(user, channel, args))
+            .Subscribe();
+
+            IDisposable trackStuckEvent = Observable.FromEventPattern<TrackStuckEventArg<LavaPlayer<LavaTrack>, LavaTrack>>(
+                handler => _lavaNode.OnTrackStuck += (args) => OnTrackStuckAsync(user, channel, args),
+                handler => _lavaNode.OnTrackStuck -= (args) => OnTrackStuckAsync(user, channel, args))
+            .Subscribe();
+
+            IDisposable trackExceptionEvent = Observable.FromEventPattern<TrackExceptionEventArg<LavaPlayer<LavaTrack>, LavaTrack>>(
+                handler => _lavaNode.OnTrackException += (args) => OnTrackExceptionAsync(user, channel, args),
+                handler => _lavaNode.OnTrackException -= (args) => OnTrackExceptionAsync(user, channel, args))
+            .Subscribe();
+
+            _disposableEvents = new() { trackEndEvent, trackStuckEvent, trackExceptionEvent };
+        }
+
+        try
+        {
+            if (voiceChannel is null)
+            {
+                _ = !bool.TryParse(_configuration["DeafenOnVoiceChannel"], out bool shouldDeafen)
+                    ? await user.VoiceChannel.ConnectAsync(selfDeaf: true)
+                    : await user.VoiceChannel.ConnectAsync(shouldDeafen);
+
+                await EmbedHelper.Create(user, channel, EmbedType.Successful, $"Joined {user.VoiceChannel.Name}");
+            }
+            else
+            {
+                _ = !bool.TryParse(_configuration["DeafenOnVoiceChannel"], out bool shouldDeafen)
+                    ? await voiceChannel.ConnectAsync(selfDeaf: true)
+                    : await voiceChannel.ConnectAsync(shouldDeafen);
+
+                await EmbedHelper.Create(user, channel, EmbedType.Successful, $"Joined {voiceChannel.Name}");
+            }
+        }
+        catch (Exception ex)
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, $"An internal error has occured.");
+            _programLogger.LogError("A player has failed to join a voice channel.", ex);
+
+            return;
+        }
+
+        // todo: check if a player is created when calling discord.net's connectasync.
+        // otherwise use lavanodes joinasync to join a voice channel and getting the player.
+        _lavaNode.TryGetPlayer(user.Guild, out LavaPlayer<LavaTrack> player);
+
+        SearchResponse response = await _lavaNode.SearchAsync(SearchType.YouTube | SearchType.SoundCloud | SearchType.Direct, query);
+
+        if (response.Status is SearchStatus.LoadFailed)
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "Failed to load songs!");
+            return;
+        }
+
+        if (response.Status is SearchStatus.NoMatches)
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, $"No matches were found for {query}");
+            return;
+        }
+
+        try
+        {
+            if (player.PlayerState is PlayerState.Playing or PlayerState.Paused)
+            {
+                player.Vueue.Enqueue(response.Tracks);
+                await EmbedHelper.Create(user, channel, EmbedType.Successful, $"Enqueued {response.Tracks.Count} songs");
+            }
+            else
+            {
+                LavaTrack track = response.Tracks.First();
+
+                await player.PlayAsync(track);
+                await EmbedHelper.Create(user, channel, EmbedType.Successful, $"Now Playing [{track.Title}]({track.Url})");
+            }
+        }
+        catch (Exception ex)
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, $"An internal error has occured.");
+            _programLogger.LogError("Failed to play a song, a playlist or a queued song", ex);
+        }
     }
 
-    public async Task<DiscordMessage> LoopAsync(DiscordChannel channel, DiscordMember member, IAudioService audioService)
+    internal async Task StopAsync(IGuildUser user, ISocketMessageChannel channel)
     {
-        if (member.VoiceState == null || member.VoiceState.Channel == null)
+        if (user?.VoiceChannel is null)
         {
-            return await Embeds.CreateErrorEmbed(channel, member, "You must first join a voice channel.");
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "You must join a voice channel first!");
+            return;
         }
-        
-        QueuedLavalinkPlayer player = audioService.GetPlayer<QueuedLavalinkPlayer>(member.Guild.Id);
 
-        // Think of the loop command as a toggle rather than having 2 seperate commands for looping and unlooping.
-        if (player.IsLooping)
+        if (!_lavaNode.TryGetPlayer(user.Guild, out LavaPlayer<LavaTrack> player))
         {
-            player.IsLooping = false;
-            return await Embeds.CreateEmbed(channel, member, "Started looping.");
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "I'm not in a voice channel!");
+            return;
         }
-        else
+
+        if (player is null)
         {
-            player.IsLooping = true;
-            return await Embeds.CreateEmbed(channel, member, "Started unlooping.");
+            return;
+        }
+
+        if (player.PlayerState is PlayerState.Stopped or PlayerState.None)
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "A song must be playing or be paused in order to stop!");
+            return;
+        }
+
+        try
+        {
+            await player.StopAsync();
+            await EmbedHelper.Create(user, channel, EmbedType.Successful, $"Stopped Playing {player.Track.Title}");
+        }
+        catch (Exception ex)
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "An internal error has occured");
+            _programLogger.LogError("Failed to stop a player.", ex);
         }
     }
 
-    public async Task<DiscordMessage> NowPlayingAsync(DiscordChannel channel, DiscordMember member, IAudioService audioService)
+    internal async Task SkipAsync(IGuildUser user, ISocketMessageChannel channel)
     {
-        if (member.VoiceState == null || member.VoiceState.Channel == null)
+        if (user?.VoiceChannel is null)
         {
-            return await Embeds.CreateErrorEmbed(channel, member, "You must first join a voice channel.");
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "You must join a voice channel first!");
+            return;
         }
 
-        QueuedLavalinkPlayer player = audioService.GetPlayer<QueuedLavalinkPlayer>(member.Guild.Id);
+        if (!_lavaNode.TryGetPlayer(user.Guild, out LavaPlayer<LavaTrack> player))
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "I'm not in a voice channel!");
+            return;
+        }
 
-        return await Embeds.CreateEmbed(channel, member, $"Now Playing: [{player.CurrentTrack.Title}]");
+        if (player is null)
+        {
+            return;
+        }
+
+        if (player.PlayerState is PlayerState.Stopped or PlayerState.None)
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "A song must be playing or be paused in order to skip!");
+            return;
+        }
+
+        if (player.Vueue.Count <= 1)
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "There isn't a queue in order to skip!");
+            return;
+        }
+
+        try
+        {
+            (LavaTrack Skipped, _) = await player.SkipAsync();
+            await EmbedHelper.Create(user, channel, EmbedType.Successful, $"Skipped {Skipped.Title}");
+        }
+        catch (Exception ex)
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "An internal error has occured.");
+            _programLogger.LogError("Failed to skip a song.", ex);
+        }
     }
 
-    public async Task<DiscordMessage> ClearQueueAsync(DiscordChannel channel, DiscordMember member, IAudioService audioService)
+    internal async Task PauseAsync(IGuildUser user, ISocketMessageChannel channel)
     {
-        if (member.VoiceState == null || member.VoiceState.Channel == null)
+        if (user?.VoiceChannel is null)
         {
-            return await Embeds.CreateErrorEmbed(channel, member, "You must first join a voice channel.");
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "You must join a voice channel first!");
+            return;
         }
 
-        QueuedLavalinkPlayer player = audioService.GetPlayer<QueuedLavalinkPlayer>(member.Guild.Id);
+        if (!_lavaNode.TryGetPlayer(user.Guild, out LavaPlayer<LavaTrack> player))
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "I'm not in a voice channel!");
+            return;
+        }
 
-        player.Queue.Clear();
-        return await Embeds.CreateEmbed(channel, member, "Sucessfully cleared the queue.");
+        if (player is null)
+        {
+            return;
+        }
+
+        if (player.PlayerState is PlayerState.Paused or PlayerState.Stopped or PlayerState.None)
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "A song must be playing in order to pause!");
+            return;
+        }
+
+        try
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Successful, $"Paused {player.Track.Title}");
+            await player.PauseAsync();
+        }
+        catch (Exception ex)
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "An internal error has occured.");
+            _programLogger.LogError("Failed to pause a song.", ex);
+        }
     }
 
-    public async Task<DiscordMessage> PostLyricsAsync(DiscordChannel channel, DiscordMember member, IAudioService audioService)
+    internal async Task ResumeAsync(IGuildUser user, ISocketMessageChannel channel)
     {
-        if (member.VoiceState == null || member.VoiceState.Channel == null)
+        if (user?.VoiceChannel is null)
         {
-            return await Embeds.CreateErrorEmbed(channel, member, "You must first join a voice channel.");
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "You must join a voice channel first!");
+            return;
         }
 
-        QueuedLavalinkPlayer player = audioService.GetPlayer<QueuedLavalinkPlayer>(member.Guild.Id);
+        if (!_lavaNode.TryGetPlayer(user.Guild, out LavaPlayer<LavaTrack> player))
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "I'm not in a voice channel!");
+            return;
+        }
 
-        using LyricsService lyricsService = new(new LyricsOptions());
-        string lyrics = await lyricsService.RequestLyricsAsync(player.CurrentTrack.Author, player.CurrentTrack.Title);
+        if (player is null)
+        {
+            return;
+        }
+
+        if (player.PlayerState is PlayerState.Playing or PlayerState.Stopped or PlayerState.None)
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "A song must be paused in order to resume!");
+            return;
+        }
+
+        try
+        {
+            await player.ResumeAsync();
+            await EmbedHelper.Create(user, channel, EmbedType.Successful, $"Resumed {player.Track.Title}");
+        }
+        catch (Exception ex)
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "An internal error has occured.");
+            _programLogger.LogError("Failed to resume a song.", ex);
+        }
+    }
+
+    internal async Task SetVolumeAsync(IGuildUser user, ISocketMessageChannel channel, int volume)
+    {
+        if (user?.VoiceChannel is null)
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "You must join a voice channel first!");
+            return;
+        }
+
+        if (!_lavaNode.TryGetPlayer(user.Guild, out LavaPlayer<LavaTrack> player))
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "I'm not in a voice channel!");
+            return;
+        }
+
+        if (player is null)
+        {
+            return;
+        }
+
+        if (volume > 200 || volume < 0)
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "The range of the volume must be between 0 and 200.");
+            return;
+        }
+
+        try
+        {
+            await player.SetVolumeAsync(volume);
+            await EmbedHelper.Create(user, channel, EmbedType.Successful, $"Increased the volume to {volume}%");
+        }
+        catch (Exception ex)
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "An internal error has occured.");
+            _programLogger.LogError("Failed to set the volume of a player.", ex);
+        }
+    }
+
+    internal async Task ShuffleAsync(IGuildUser user, ISocketMessageChannel channel)
+    {
+        if (user?.VoiceChannel is null)
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "You must join a voice channel first!");
+            return;
+        }
+
+        if (!_lavaNode.TryGetPlayer(user.Guild, out LavaPlayer<LavaTrack> player))
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "I'm not in a voice channel!");
+            return;
+        }
+
+        if (player is null)
+        {
+            return;
+        }
+
+        if (player.Vueue.Count <= 1)
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "There aren't any songs to shuffle in the queue!");
+            return;
+        }
+
+        try
+        {
+            player.Vueue.Shuffle();
+            await EmbedHelper.Create(user, channel, EmbedType.Successful, "Shuffled the queue!");
+        }
+        catch (Exception ex)
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "An internal error has occured.");
+            _programLogger.LogError("Failed to shuffle a queue's songs in a player.", ex);
+        }
+    }
+
+    internal async Task FetchLyricsAsync(IGuildUser user, ISocketMessageChannel channel)
+    {
+        if (user?.VoiceChannel is null)
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "You must join a voice channel first!");
+            return;
+        }
+
+        if (!_lavaNode.TryGetPlayer(user.Guild, out LavaPlayer<LavaTrack> player))
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "I'm not in a voice channel!");
+            return;
+        }
+
+        if (player is null)
+        {
+            return;
+        }
+
+        if (player.PlayerState is PlayerState.Stopped or PlayerState.None)
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, $"A song must be playing or be paused in order to get its lyrics!");
+            return;
+        }
+
+        string lyrics = string.Empty;
+
+        for (int i = 0; i < 2; i++)
+        {
+            try
+            {
+                lyrics = await player.Track.FetchLyricsFromGeniusAsync();
+
+                if (!string.IsNullOrWhiteSpace(lyrics))
+                {
+                    break;
+                }
+                else
+                {
+                    lyrics = await player.Track.FetchLyricsFromOvhAsync();
+                }
+            }
+            catch (Exception ex)
+            {
+                await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "Failed to fetch lyrics!");
+                _programLogger.LogError("Failed to fetch the lyrics of a song.", ex);
+
+                return;
+            }
+        }
 
         if (string.IsNullOrWhiteSpace(lyrics))
         {
-            return await Embeds.CreateErrorEmbed(channel, member, "Could not find any lyrics for the specified track.");
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, $"No lyrics were found for {player.Track.Title}");
+            return;
         }
 
-        return await Embeds.CreateEmbed(channel, member, lyrics);
+        try
+        {
+            StringBuilder lyricsBuilder = new();
+            foreach (string line in lyrics.Split(Environment.NewLine))
+            {
+                lyricsBuilder.AppendLine(line);
+            }
+
+            await EmbedHelper.Create(user, channel, EmbedType.Successful, $"```{lyricsBuilder}```");
+        }
+        catch (Exception ex)
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "An internal error has occured.");
+            _programLogger.LogError("Failed to embed a song's lyrics.", ex);
+        }
     }
 
-    public async Task<DiscordMessage> OnTrackEndAsync(TrackEndEventArgs trackEndArgs, DiscordChannel channel, DiscordMember member)
+    internal async Task FetchArtworkAsync(IGuildUser user, ISocketMessageChannel channel)
     {
-        if (!trackEndArgs.MayStartNext)
+        if (user?.VoiceChannel is null)
         {
-            return null;
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "You must join a voice channel first!");
+            return;
         }
 
-        if (!(trackEndArgs.Player as QueuedLavalinkPlayer).Queue.TryDequeue(out LavalinkTrack queuedLavalinkTrack))
+        if (!_lavaNode.TryGetPlayer(user.Guild, out LavaPlayer<LavaTrack> player))
         {
-            return null;
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "I'm not in a voice channel!");
+            return;
         }
 
-        if (queuedLavalinkTrack is not LavalinkTrack lavalinkTrack)
+        if (player is null)
         {
-            return await Embeds.CreateErrorEmbed(channel, member, "Next item in queue is not a track.");
+            return;
         }
 
-        await trackEndArgs.Player.PlayAsync(lavalinkTrack);
-        return await Embeds.CreateEmbed(channel, member, $"Now Playing: [{lavalinkTrack.Title}]({lavalinkTrack.Source}).");
+        if (player.PlayerState is PlayerState.Stopped or PlayerState.None)
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "A song must be playing or be paused in order to get its artwork!");
+            return;
+        }
+
+        try
+        {
+            string artworkUrl = await player.Track.FetchArtworkAsync();
+
+            if (string.IsNullOrWhiteSpace(artworkUrl))
+            {
+                await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, $"Failed to find an artwork of {player.Track.Title}!");
+                return;
+            }
+
+            await EmbedHelper.Create(user, channel, EmbedType.Successful, imageUrl: artworkUrl);
+        }
+        catch (Exception ex)
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "An internal error has occured.");
+            _programLogger.LogError("Failed to get a song's artwork.", ex);
+        }
     }
 
-    public async Task<DiscordMessage> OnTrackStuckAsync(TrackStuckEventArgs truckStuckArgs, DiscordChannel channel, DiscordMember member)
+    internal async Task MixChannelsAsync(IGuildUser user, ISocketMessageChannel channel, double rightToRight, double leftToLeft, double rightToLeft, double leftToRight)
     {
-        await truckStuckArgs.Player.StopAsync();
-
-        if (!(truckStuckArgs.Player as QueuedLavalinkPlayer).Queue.TryDequeue(out LavalinkTrack queuedLavalinkTrack))
+        if (user?.VoiceChannel is null)
         {
-            return null;
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "You must join a voice channel first!");
+            return;
         }
 
-        if (queuedLavalinkTrack is not LavalinkTrack lavalinkTrack)
+        if (!_lavaNode.TryGetPlayer(user.Guild, out LavaPlayer<LavaTrack> player))
         {
-            return await Embeds.CreateErrorEmbed(channel, member, "Next item in queue is not a track.");
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "I'm not in a voice channel!");
+            return;
         }
 
-        await truckStuckArgs.Player.PlayAsync(lavalinkTrack);
-        return await Embeds.CreateEmbed(channel, member, "Playing the next track in the queue because the current one was stuck.");
+        if (player is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await player.ApplyFilterAsync(new ChannelMixFilter
+            {
+                RightToRight = rightToRight,
+                LeftToLeft = leftToLeft,
+                RightToLeft = rightToLeft,
+                LeftToRight = leftToRight,
+            });
+        }
+        catch (Exception ex)
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "An internal error has occured.");
+            _programLogger.LogError("Failed to apply a channel mixing filter in a player.", ex);
+        }
+    }
+
+    internal async Task DistortAsync(IGuildUser user, ISocketMessageChannel channel, int offset, int tanOffset, int cosOffset, int scale, int tanScale, int cosScale)
+    {
+        if (user?.VoiceChannel is null)
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "You must join a voice channel first!");
+            return;
+        }
+
+        if (!_lavaNode.TryGetPlayer(user.Guild, out LavaPlayer<LavaTrack> player))
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "I'm not in a voice channel!");
+            return;
+        }
+
+        if (player is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await player.ApplyFilterAsync(new DistortionFilter
+            {
+                Offset = offset,
+                TanOffset = tanOffset,
+                CosOffset = cosOffset,
+                Scale = scale,
+                TanScale = tanScale,
+                CosScale = cosScale,
+            });
+        }
+        catch (Exception ex)
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "An internal error has occured.");
+            _programLogger.LogError("Failed to apply a distortion filter in a player.", ex);
+        }
+    }
+
+    internal async Task KarokeAsync(IGuildUser user, ISocketMessageChannel channel, double filterWidth, double band, double monoLevel, double level)
+    {
+        if (user?.VoiceChannel is null)
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "You must join a voice channel first!");
+            return;
+        }
+
+        if (!_lavaNode.TryGetPlayer(user.Guild, out LavaPlayer<LavaTrack> player))
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "I'm not in a voice channel!");
+            return;
+        }
+
+        if (player is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await player.ApplyFilterAsync(new KarokeFilter
+            {
+                FilterWidth = filterWidth,
+                FilterBand = band,
+                MonoLevel = monoLevel,
+                Level = level,
+            });
+        }
+        catch (Exception ex)
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "An internal error has occured.");
+            _programLogger.LogError("Failed to apply a karoke filter in a player.", ex);
+        }
+    }
+
+    internal async Task LowPassAsync(IGuildUser user, ISocketMessageChannel channel, double smoothing)
+    {
+        if (user?.VoiceChannel is null)
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "You must join a voice channel first!");
+            return;
+        }
+
+        if (!_lavaNode.TryGetPlayer(user.Guild, out LavaPlayer<LavaTrack> player))
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "I'm not in a voice channel!");
+            return;
+        }
+
+        if (player is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await player.ApplyFilterAsync(new LowPassFilter { Smoothing = smoothing });
+        }
+        catch (Exception ex)
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "An internal error has occured.");
+            _programLogger.LogError("Failed to apply a low-pass filter in a player.", ex);
+        }
+    }
+
+    internal async Task PanAsync(IGuildUser user, ISocketMessageChannel channel, double hz)
+    {
+        if (user?.VoiceChannel is null)
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "You must join a voice channel first!");
+            return;
+        }
+
+        if (!_lavaNode.TryGetPlayer(user.Guild, out LavaPlayer<LavaTrack> player))
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "I'm not in a voice channel!");
+            return;
+        }
+
+        if (player is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await player.ApplyFilterAsync(new RotationFilter { Hertz = hz });
+        }
+        catch (Exception ex)
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "An internal error has occured.");
+            _programLogger.LogError("Failed to apply an audio-pan filter in a player.", ex);
+        }
+    }
+
+    internal async Task TimescaleAsync(IGuildUser user, ISocketMessageChannel channel, double pitch, double rate, double speed)
+    {
+        if (user?.VoiceChannel is null)
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "You must join a voice channel first!");
+            return;
+        }
+
+        if (!_lavaNode.TryGetPlayer(user.Guild, out LavaPlayer<LavaTrack> player))
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "I'm not in a voice channel!");
+            return;
+        }
+
+        if (player is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await player.ApplyFilterAsync(new TimescaleFilter
+            {
+                Pitch = pitch,
+                Rate = rate,
+                Speed = speed,
+            });
+        }
+        catch (Exception ex)
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "An internal error has occured.");
+            _programLogger.LogError("Failed to apply a timescale filter in a player.", ex);
+        }
+    }
+
+    internal async Task OscillateVolumeAsync(IGuildUser user, ISocketMessageChannel channel, double depth, double frequency)
+    {
+        if (user?.VoiceChannel is null)
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "You must join a voice channel first!");
+            return;
+        }
+
+        if (!_lavaNode.TryGetPlayer(user.Guild, out LavaPlayer<LavaTrack> player))
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "I'm not in a voice channel!");
+            return;
+        }
+
+        if (player is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await player.ApplyFilterAsync(new TremoloFilter
+            {
+                Depth = depth,
+                Frequency = frequency,
+            });
+        }
+        catch (Exception ex)
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "An internal error has occured.");
+            _programLogger.LogError("Failed to apply a tremolo filter in a player.", ex);
+        }
+    }
+
+    internal async Task OscillatePitchAsync(IGuildUser user, ISocketMessageChannel channel, double frequency, double depth)
+    {
+        if (user?.VoiceChannel is null)
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "You must join a voice channel first!");
+            return;
+        }
+
+        if (!_lavaNode.TryGetPlayer(user.Guild, out LavaPlayer<LavaTrack> player))
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "I'm not in a voice channel!");
+            return;
+        }
+
+        if (player is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await player.ApplyFilterAsync(new VibratoFilter
+            {
+                Frequency = frequency,
+                Depth = depth,
+            });
+        }
+        catch (Exception ex)
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "An internal error has occured.");
+            _programLogger.LogError("Failed to apply a vibrato filter in a player.", ex);
+        }
+    }
+
+    private async Task OnTrackEndedAsync(IGuildUser user, ISocketMessageChannel channel, TrackEndEventArg<LavaPlayer<LavaTrack>, LavaTrack> trackEnded)
+    {
+        if (trackEnded.Reason is TrackEndReason.Stopped)
+        {
+            return;
+        }
+
+        if (!trackEnded.Player.Vueue.TryDequeue(out LavaTrack queuedSong))
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Successful, "Queue finished!");
+            return;
+        }
+
+        if (queuedSong is not LavaTrack track)
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "Next item in queue is not a track!");
+            return;
+        }
+
+        try
+        {
+            await trackEnded.Player.PlayAsync(track);
+            await EmbedHelper.Create(user, channel, EmbedType.Successful, $"Now playing: {track.Title}");
+        }
+        catch (Exception ex)
+        {
+            await EmbedHelper.Create(user, channel, EmbedType.Unsuccessful, "An internal error has occured.");
+            _programLogger.LogError("Failed to play the next queued song in a player.", ex);
+        }
+    }
+
+    private async Task OnTrackStuckAsync(IGuildUser user, ISocketMessageChannel channel, TrackStuckEventArg<LavaPlayer<LavaTrack>, LavaTrack> trackStuck)
+    {
+        trackStuck.Player.Vueue.Enqueue(trackStuck.Track);
+
+        await EmbedHelper.Create(
+            user,
+            channel,
+            EmbedType.Successful,
+            $"{trackStuck.Track.Title} has been re-added to the queue after getting stuck",
+            overridableColor: 0xFFEF00);
+    }
+
+    private async Task OnTrackExceptionAsync(IGuildUser user, ISocketMessageChannel channel, TrackExceptionEventArg<LavaPlayer<LavaTrack>, LavaTrack> trackException)
+    {
+        trackException.Player.Vueue.Enqueue(trackException.Track);
+
+        await EmbedHelper.Create(
+            user,
+            channel,
+            EmbedType.Successful,
+            $"{trackException.Track.Title} has been re-added to queue because of an internal issue.",
+            overridableColor: 0xFFEF00);
     }
 }
