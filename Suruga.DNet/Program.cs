@@ -1,28 +1,32 @@
-﻿using DisCatSharp;
-using DisCatSharp.Enums;
+﻿using Discord;
+using Discord.Interactions;
+using Discord.WebSocket;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Console;
-using Suruga.Interactions;
-using Suruga.Logging;
-using System.Diagnostics.CodeAnalysis;
+using Suruga.DNet.Handlers;
+using Suruga.DNet.Logging;
+using Suruga.DNet.Services;
+using System;
+using System.IO;
+using Victoria;
 
-namespace Suruga;
+namespace Suruga.DNet;
 
 internal sealed class Program
 {
-    [NotNull]
-    internal static IHost? Host { get; private set; }
+    internal static IHost Host { get; private set; }
 
     private static void Main()
     {
+        Console.Title = "Suruga";
+
         Host = Microsoft.Extensions.Hosting.Host
             .CreateDefaultBuilder()
-            .ConfigureAppConfiguration(configuration =>
+            .ConfigureAppConfiguration(config =>
             {
-                Directory.CreateDirectory(PersistentStoragePaths.LogsDirectory);
                 Directory.CreateDirectory(PersistentStoragePaths.LavalinkDirectory);
 
                 if (!File.Exists(PersistentStoragePaths.LavalinkYmlFile))
@@ -140,8 +144,8 @@ internal sealed class Program
                         [Status]
                         Type=Online
 
-                        # 'Status' supports the following values: Playing, ListeningTo, Streaming, Competing, Watching, Custom. Can also be left empty.
-                        # 'Name' is a description of your desired status. Can also be left empty as well.
+                        # 'Status' supports the following values: Playing, ListeningTo, Streaming, Competing, Watching, Custom.
+                        # 'Name' is a description of your desired status. Can also be left empty.
                         [Activity]
                         Type=
                         Name=
@@ -149,7 +153,6 @@ internal sealed class Program
                         # 'Volume' ranges from 0-2000. This sets the Lavalink server's internal volume, not the voice channel's.
                         # 'Password' must be the same as in the application.yml file.
                         # 'Endpoint' and 'ProxyEndpoint' must be the same as in the application.yml file and have the same form (Address:Port).
-                        # 'Endpoint' also refers to Lavalink's REST and WebSocket endpoints.
                         # 'ProxyEndpoint' must be left empty if you are not using a proxy.
                         [Lavalink]
                         Volume=70
@@ -158,22 +161,21 @@ internal sealed class Program
                         ProxyEndpoint=
                         """);
 
-                    Console.WriteLine($"A configuration file has been generated at {PersistentStoragePaths.BaseDirectory}. " +
-                                      "Enter a valid bot token and configure anything else you may want before re-launching.");
+                    Console.WriteLine($"A configuration file has been generated at {PersistentStoragePaths.BaseDirectory}." +
+                                      "Enter a valid bot token before re-launching.");
 
                     Environment.Exit(0);
                 }
 
-                configuration.SetBasePath(PersistentStoragePaths.BaseDirectory);
-                configuration.AddIniFile(PersistentStoragePaths.ConfigurationFile);
+                config.SetBasePath(PersistentStoragePaths.BaseDirectory);
+                config.AddIniFile(PersistentStoragePaths.ConfigurationFile);
             })
             .ConfigureLogging(loggingBuilder =>
             {
-                loggingBuilder
-                .AddConsoleFormatter<SimpleColoredConsoleFormatter, ConsoleFormatterOptions>()
-                .AddConsole(options => options.FormatterName = "simple-colored-console")
+                loggingBuilder.AddConsoleFormatter<SimpleColoredConsoleFormatter, ConsoleFormatterOptions>();
+                loggingBuilder.AddConsole(options => options.FormatterName = "simple-colored-console");
 #if DEBUG
-                .SetMinimumLevel(LogLevel.Debug);
+                loggingBuilder.SetMinimumLevel(LogLevel.Debug);
 #else
                 loggingBuilder.SetMinimumLevel(LogLevel.Information);
 #endif
@@ -183,25 +185,33 @@ internal sealed class Program
                 services
                 .AddSingleton(ctx.Configuration)
                 .AddSingleton<Logger>()
-                .AddSingleton<MusicInteraction>()
-                .AddSingleton<PingInteraction>()
-                .AddSingleton(new DiscordClient(new DiscordConfiguration
+                .AddSingleton<EmbedHandler>()
+                .AddSingleton<InteractionHandler>()
+                .AddSingleton(new DiscordSocketClient(new DiscordSocketConfig
                 {
-                    Token = ctx.Configuration.GetRequiredSection("Bot")["Token"] ?? throw new ArgumentNullException("An invalid token was detected. Re-configure the bot and try again."),
-                    TokenType = TokenType.Bot,
-                    Intents = DiscordIntents.All,
-                    /*
-                    EnableSentry = true,
-                    AttachUserInfo = true,
-                    DeveloperUserId = 440213996067618826,
-                    */
-                    
+                    GatewayIntents = GatewayIntents.MessageContent | GatewayIntents.GuildVoiceStates,
 #if DEBUG
-                    MinimumLogLevel = LogLevel.Debug,
+                    LogLevel = LogSeverity.Debug,
 #else
-                    MinimumLogLevel = LogLevel.Information,
+                    LogLevel = LogSeverity.Info,
 #endif
-                }));
+                }))
+                .AddSingleton((services) =>
+                {
+                    DiscordSocketClient client = services.GetRequiredService<DiscordSocketClient>();
+                    return new InteractionService(client, new InteractionServiceConfig
+                    {
+                        DefaultRunMode = RunMode.Async,
+#if DEBUG
+                        LogLevel = LogSeverity.Debug,
+#else
+                        LogLevel = LogSeverity.Info,
+#endif
+                    });
+                })
+                .AddSingleton<MusicInteractionService>()
+                .AddSingleton<PingInteractionService>()
+                .AddLavaNode();
             })
             .UseConsoleLifetime()
             .Build();

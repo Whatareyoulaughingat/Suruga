@@ -1,8 +1,10 @@
 ﻿using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Console;
+using System;
+using System.IO;
 
-namespace Suruga.Logging;
+namespace Suruga.DNet.Logging;
 
 internal sealed class SimpleColoredConsoleFormatter : ConsoleFormatter
 {
@@ -10,7 +12,7 @@ internal sealed class SimpleColoredConsoleFormatter : ConsoleFormatter
     {
     }
 
-    public override void Write<TState>(in LogEntry<TState> logEntry, IExternalScopeProvider? scopeProvider, TextWriter textWriter)
+    public override void Write<TState>(in LogEntry<TState> logEntry, IExternalScopeProvider scopeProvider, TextWriter textWriter)
         => textWriter.Write($"[{DateTime.Now:d}] [{DateTime.Now:T}] [{SetSeverityColor(GetSeverity(logEntry.LogLevel))}]: " +
                             $"{logEntry.Formatter(logEntry.State, logEntry.Exception)}{Environment.NewLine}");
 
