@@ -1,13 +1,13 @@
 ﻿using Microsoft.Extensions.Logging;
 using System;
 
-namespace Suruga.DNet.Logging;
+namespace Suruga.Logging;
 
-public sealed partial class Logger
+public partial class ProgramLogger
 {
     private readonly ILogger _logger;
 
-    public Logger(ILogger<Logger> logger)
+    public ProgramLogger(ILogger<ProgramLogger> logger)
         => _logger = logger;
 
     [LoggerMessage(EventId = 1, EventName = "ProgramLoggingHandler-Log", Message = "{Message}")]
@@ -24,9 +24,4 @@ public sealed partial class Logger
 
     [LoggerMessage(EventId = 5, EventName = "ProgramLoggingHandler-LogCritical", Level = LogLevel.Critical, Message = "{Message}")]
     internal partial void LogCritical(string message, Exception ex);
-
-    internal void Log(object value, string message, Exception exception)
-    {
-        throw new NotImplementedException();
-    }
 }
