@@ -37,8 +37,7 @@ public sealed class AudioCommands
     IAudioService audio,
     IArtworkService artworkService,
     ILyricsService lyricsService,
-    TrackSelectionNotificationMediator mediator,
-    ILogger<AudioCommands> logger
+    TrackSelectedMediator mediator
 ) : CommandGroup
 {
     [Command("play")]
@@ -91,7 +90,7 @@ public sealed class AudioCommands
             ct: CancellationToken
         );
 
-        mediator.Add(new TrackSelectionNotification(player, player.State, tracksResult.Tracks));
+        mediator.Add(new TrackSelectedMessage(player, player.State, tracksResult.Tracks.AsReadOnly()));
         return Result.FromSuccess();
     }
 
@@ -133,7 +132,7 @@ public sealed class AudioCommands
         }
 
         await player.ResumeAsync(CancellationToken);
-        return (Result)await feedback.SendContextualSuccessAsync($"Resumed [{player.CurrentTrack.Title}]({player.CurrentTrack?.Uri}).", ct: CancellationToken);
+        return (Result)await feedback.SendContextualSuccessAsync($"Resumed [{player.CurrentTrack?.Title}]({player.CurrentTrack?.Uri}).", ct: CancellationToken);
     }
 
     [Command("pause")]
@@ -149,7 +148,7 @@ public sealed class AudioCommands
         }
 
         await player.PauseAsync(CancellationToken);
-        return (Result)await feedback.SendContextualSuccessAsync($"Paused [{player.CurrentTrack.Title}]({player.CurrentTrack?.Uri}).", ct: CancellationToken);
+        return (Result)await feedback.SendContextualSuccessAsync($"Paused [{player.CurrentTrack?.Title}]({player.CurrentTrack?.Uri}).", ct: CancellationToken);
     }
 
     [Command("skip")]
@@ -165,7 +164,7 @@ public sealed class AudioCommands
         }
 
         await player.SkipAsync(numberOfTracks, CancellationToken);
-        return (Result)await feedback.SendContextualSuccessAsync($"Skipped [{player.CurrentTrack.Title}]({player.CurrentTrack?.Uri}).", ct: CancellationToken);
+        return (Result)await feedback.SendContextualSuccessAsync($"Skipped [{player.CurrentTrack?.Title}]({player.CurrentTrack?.Uri}).", ct: CancellationToken);
     }
 
     [Command("stop")]
@@ -180,7 +179,7 @@ public sealed class AudioCommands
             return Result.FromSuccess();
         }
 
-        LavalinkTrack currentTrack = player.CurrentTrack;
+        LavalinkTrack currentTrack = player.CurrentTrack!;
 
         await player.StopAsync(CancellationToken);
         return (Result)await feedback.SendContextualSuccessAsync($"Stopped [{currentTrack?.Title}]({currentTrack?.Uri}).", ct: CancellationToken);
@@ -309,11 +308,11 @@ public sealed class AudioCommands
             return Result.FromSuccess();
         }
 
-        string? nullableLyrics = await lyricsService.GetLyricsAsync(player.CurrentTrack, CancellationToken);
+        string? lyrics = await lyricsService.GetLyricsAsync(player.CurrentTrack!, CancellationToken);
 
-        if (nullableLyrics is not string lyrics)
+        if (lyrics is null)
         {
-            return (Result)await feedback.SendContextualErrorAsync($"Could not find a lyrics source for [{player.CurrentTrack.Title}]({player.CurrentTrack?.Uri}).", ct: CancellationToken);
+            return (Result)await feedback.SendContextualErrorAsync($"Could not find a lyrics source for [{player.CurrentTrack?.Title}]({player.CurrentTrack?.Uri}).", ct: CancellationToken);
         }
 
         return (Result)await feedback.SendContextualSuccessAsync(lyrics, ct: CancellationToken);

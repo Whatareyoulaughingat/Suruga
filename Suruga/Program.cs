@@ -26,23 +26,25 @@ namespace Suruga;
 
 internal sealed class Program
 {
-    private static async Task Main(
+    private static async Task Main
+    (
         string token,
         UserStatus? status,
         string? activityName,
         ActivityType? activityType,
         string lavalinkHttpAddress = "http://localhost:2333",
         string lavalinkWsAddress = "ws://localhost:2333",
-        string lavalinkPassword = "youshallnotpass")
+        string lavalinkPassword = "youshallnotpass"
+    )
     {
         Console.Title = "Suruga";
 
-        IHost host = Host.CreateDefaultBuilder()
+        using IHost host = Host.CreateDefaultBuilder()
             .UseConsoleLifetime()
             .AddDiscordService(_ => token)
             .ConfigureServices(services =>
             {
-                services.AddSingleton<TrackSelectionNotificationMediator>();
+                services.AddSingleton<TrackSelectedMediator>();
 
                 services
                 .AddSingleton<SlashService>()

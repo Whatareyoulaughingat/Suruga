@@ -2,7 +2,6 @@
 using Remora.Discord.API.Abstractions.Objects;
 using Remora.Discord.API.Objects;
 using Remora.Discord.Interactivity;
-using System.Collections.Immutable;
 using System.Text;
 
 namespace Suruga.Handlers;
@@ -13,9 +12,9 @@ internal sealed class TrackSelectionEmbedHelper
 
     internal static List<ButtonComponent> TrackSelectionButtons { get; } = [];
 
-    internal static void GenerateButtons(ImmutableArray<LavalinkTrack> tracks)
+    internal static void GenerateButtons(IReadOnlyList<LavalinkTrack> tracks)
     {
-        for (int i = 1; i <= tracks.Length; i++)
+        for (int i = 1; i <= tracks.Count; i++)
         {
             EmbedTrackBuilder.AppendLine($"{i}. [{tracks[i].Title}]({tracks[i]?.Uri}) ({tracks[i]?.Duration})");
 
