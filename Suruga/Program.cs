@@ -1,26 +1,15 @@
-﻿using Lavalink4NET.Artwork;
+﻿using Discord;
+using Discord.Addons.Hosting;
+using Discord.Interactions;
+using Discord.WebSocket;
 using Lavalink4NET.Extensions;
-using Lavalink4NET.InactivityTracking.Extensions;
-using Lavalink4NET.Lyrics;
-using Lavalink4NET.Remora.Discord;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Remora.Commands.Extensions;
-using Remora.Discord.API;
-using Remora.Discord.API.Abstractions.Gateway.Commands;
-using Remora.Discord.API.Abstractions.Objects;
-using Remora.Discord.API.Gateway.Commands;
-using Remora.Discord.API.Objects;
-using Remora.Discord.Commands.Extensions;
-using Remora.Discord.Commands.Services;
-using Remora.Discord.Gateway;
-using Remora.Discord.Hosting.Extensions;
-using Remora.Discord.Interactivity.Extensions;
-using Suruga.Commands;
-using Suruga.Interactions;
-using Suruga.Intermediary;
-using System.Collections.Immutable;
+using Suruga.Contexts;
+using Suruga.Options;
+using Suruga.Services;
 
 namespace Suruga;
 
@@ -29,82 +18,67 @@ internal sealed class Program
     private static async Task Main
     (
         string token,
-        UserStatus? status,
-        string? activityName,
-        ActivityType? activityType,
-        string lavalinkHttpAddress = "http://localhost:2333",
-        string lavalinkWsAddress = "ws://localhost:2333",
+        FileInfo? llmModel = null,
+        string? llmInstructions = null,
+        bool enableMusicCommands = false,
+        string lavalinkRestHostname = "http://localhost:2333",
+        string lavalinkWebsocketHostname = "ws://localhost:2333/v4/websocket",
         string lavalinkPassword = "youshallnotpass"
     )
     {
         Console.Title = "Suruga";
+            
+        await Host
+        .CreateDefaultBuilder()
+        .ConfigureServices(services =>
+        {
+            services.AddLogging(x => x.AddConsole());
 
-        using IHost host = Host.CreateDefaultBuilder()
-            .UseConsoleLifetime()
-            .AddDiscordService(_ => token)
-            .ConfigureServices(services =>
+            services.AddOptions<LargeLanguageModelCommandsOptions>().Configure(x =>
             {
-                services.AddSingleton<TrackSelectedMediator>();
+                x.Model = llmModel;
+                x.Instructions = Path.Exists(llmInstructions) ? File.ReadAllText(llmInstructions) : llmInstructions;
+            });
+            
+            services.AddOptions<LavalinkConnectionServiceOptions>().Configure(x => x.EnableMusicCommands = enableMusicCommands);
 
-                services
-                .AddSingleton<SlashService>()
-                .AddDiscordCommands(enableSlash: true)
-                .AddCommandTree().WithCommandGroup<AudioCommands>().Finish()
-                .AddInteractivity()
-                .AddInteractionGroup<TrackSelectionInteraction>();
+            services
+            .AddDbContext<DbContext, DatabaseContext>(x => x.UseSqlite("Data Source=ai_sessions.db"))
+            .AddMemoryCache()
+            .AddHttpClient();
 
-                services
-                .AddLavalink()
-                .AddInactivityTracking()
-                .AddSingleton<ILyricsService, LyricsService>()
-                .AddSingleton<IArtworkService, ArtworkService>()
-                .AddMemoryCache();
-
-                services
-                .Configure<DiscordGatewayClientOptions>(options =>
-                {
-                    options.Intents |= GatewayIntents.GuildVoiceStates | GatewayIntents.MessageContents;
-                    options.Presence = new UpdatePresence
-                    (
-                        Status: status ?? UserStatus.Online,
-                        IsAFK: false,
-                        Since: null,
-                        Activities: ImmutableArray.Create(new Activity(activityName ?? string.Empty, activityType.GetValueOrDefault()))
-                    );
-                })
-                .ConfigureLavalink(options =>
-                {
-                    string lavalinkWsFullAddress = lavalinkWsAddress.EndsWith('/')
-                        ? lavalinkWsAddress + "v4/websocket"
-                        : lavalinkWsAddress + "/v4/websocket";
-
-                    options.BaseAddress = new(lavalinkHttpAddress);
-                    options.WebSocketUri = new(lavalinkWsFullAddress);
-                    options.Passphrase = lavalinkPassword;
-                })
-                .ConfigureInactivityTracking(options => options.DefaultTimeout = TimeSpan.FromMinutes(2.00));
+            services
+            .AddLavalink()
+            .ConfigureLavalink(x =>
+            { 
+                x.BaseAddress = new Uri(lavalinkRestHostname);
+                x.WebSocketUri = new Uri(lavalinkWebsocketHostname);
+                x.Passphrase = lavalinkPassword;
             })
-            .ConfigureLogging(logging =>
+            .AddHostedService<LavalinkConnectionService>();
+
+            services.AddDiscordHost((configuration, _) =>
             {
-                logging
-                .AddConsole()
-                .AddFilter("System.Net.Http.HttpClient.*.LogicalHandler", LogLevel.Warning)
-                .AddFilter("System.Net.Http.HttpClient.*.ClientHandler", LogLevel.Warning)
-#if DEBUG
-                .SetMinimumLevel(LogLevel.Debug);
-#else
-                .SetMinimumLevel(LogLevel.Information);
-#endif
-            })
-            .Build();
+                configuration.SocketConfig = new DiscordSocketConfig
+                {
+                    LogLevel = LogSeverity.Info,
+                    GatewayIntents = GatewayIntents.Guilds | GatewayIntents.GuildBans | GatewayIntents.GuildVoiceStates,
+                };
 
-        SlashService slashService = host.Services.GetRequiredService<SlashService>();
-#if DEBUG
-        await slashService.UpdateSlashCommandsAsync(DiscordSnowflake.New(1159852457548058744));
-#else
-        await slashService.UpdateSlashCommandsAsync();
-#endif
-        await host.RunAsync();
-        await host.WaitForShutdownAsync();
+                configuration.Token = token;
+            });
+
+            services.AddInteractionService((configuration, _) =>
+            {
+                configuration.LogLevel = LogSeverity.Info;
+                configuration.DefaultRunMode = RunMode.Async;
+                configuration.UseCompiledLambda = true;
+            });
+
+            services
+            .AddHostedService<DatabaseMigrationService>()
+            .AddHostedService<SlashCommandService>();
+        })
+        .RunConsoleAsync();
     }
 }
