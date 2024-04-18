@@ -367,3 +367,5 @@ FodyWeavers.xsd
 /Suruga/ai_sessions.db
 /Suruga/Properties
 /Suruga/ai_sessions.db-wal
+/Old Suruga
+*.db
