@@ -38,11 +38,15 @@ internal sealed class SlashCommandService
         Client.InteractionCreated += OnInteractionCreated;
 
         await Client.WaitForReadyAsync(stoppingToken);
+        await interactions.RegisterCommandsGloballyAsync();
+
+        /*
 #if DEBUG
         await interactions.RegisterCommandsToGuildAsync(guildId: 1159852457548058744);
 #else
         await interactions.RegisterCommandsGloballyAsync();
 #endif
+*/
     }
 
     private async Task OnInteractionCreated(SocketInteraction interaction)
