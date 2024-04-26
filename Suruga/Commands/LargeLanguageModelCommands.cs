@@ -83,6 +83,7 @@ public sealed class LargeLanguageModelCommands(IOptions<LargeLanguageModelComman
 
         if (!result)
         {
+            await RespondAsync("Could not clear session history.");
             return;
         }
 
