@@ -72,7 +72,6 @@ internal sealed class Program
             {
                 configuration.LogLevel = LogSeverity.Info;
                 configuration.DefaultRunMode = RunMode.Async;
-                configuration.UseCompiledLambda = true;
             });
 
             services
