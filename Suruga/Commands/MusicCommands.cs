@@ -9,6 +9,7 @@ using Lavalink4NET.Tracks;
 using Suruga.Commands.Autocomplete;
 using Suruga.Contexts;
 using Suruga.Contexts.Entities;
+using System.Collections.ObjectModel;
 
 #pragma warning disable CS1591
 namespace Suruga.Commands;
@@ -35,7 +36,7 @@ public sealed class MusicCommands(IAudioService audio, DatabaseContext database)
             return;
         }
 
-        IReadOnlyList<TrackQueueItem>? queue = await database.RetrieveTrackQueueAsync(Context.Guild.Id);
+        ReadOnlyCollection<TrackQueueItem>? queue = await database.RetrieveTrackQueueAsync(Context.Guild.Id);
 
         if (queue is not null)
         {
